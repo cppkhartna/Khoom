@@ -58,7 +58,7 @@ GLuint filter = 0;       // texture filtering method to use (nearest, linear, li
 class world 
 {
 public:
-	world (){Init();};
+world (){Init();};
 	~world (){};
 	void Init();
 	void DrawGLScene();

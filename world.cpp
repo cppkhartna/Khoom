@@ -12,6 +12,16 @@ vertex::vertex(const vertex& vert)
 	u = vert.u;
 	v = vert.v;
 }
+
+vertex::vertex(float c_x, float c_y, float c_z, float c_u, float c_v)
+{
+	x = c_x;
+	y = c_y;
+	z = c_z;
+	u = c_u;
+	v = c_v;
+}
+
 void vertex::set3d(float set_x, float set_y, float set_z)
 {
 	x = set_x;
@@ -27,7 +37,8 @@ void vertex::setTex(float set_u, float set_v)
 
 void vertex::glCoords()
 {
-	glTexCoord2f(u, v);
+	if (u*u + v*v != 0)
+		glTexCoord2f(u, v);
 	glVertex3f(x, y, z);
 }
 
@@ -53,12 +64,9 @@ polygon::~polygon()
 	delete [] vertices;
 }
 
-void polygon::addVertex(const vertex add_v)
+void polygon::addVertex(int index, const vertex add_v)
 {
-	vert_i++;
-	//if (vert_i > vert_count)
-		//throw "Ошибка формирования полигона %d - %d", vert_count, vert_i;
-	vertices[vert_i] = add_v;
+	vertices[index] = add_v;
 }
 
 void polygon::glVertices()
@@ -67,6 +75,12 @@ void polygon::glVertices()
 	{
 		vertices[i].glCoords();
 	}
+}
+
+void polygon::glVertex(int index, float r, float g, float b)
+{
+	glColor3f(r, g, b);
+	vertices[index].glCoords();
 }
 
 void polygon::glPolygon()
@@ -90,10 +104,3 @@ void quad::glPolygon()
 	glEnd();
 }
 
-
-
-int polygon::vert_i = 0;
-int triangle::vert_i = 0;
-int triangle::vert_count = 3;
-int quad::vert_count = 4;
-int quad::vert_i = 0;

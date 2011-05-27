@@ -1,13 +1,5 @@
 #include "khoom.hpp"
 
-//class world 
-//{
-//public:
-	//world ();
-	//~world ();
-//};
-//
-
 class vertex 
 {
 	GLfloat x, y, z; //3d
@@ -15,6 +7,7 @@ class vertex
 public:
 	vertex () {};
   vertex(const vertex& vert);
+	vertex(float c_x, float c_y, float c_z, float c_u, float c_v);
 	~vertex () {};
 	void set3d(float set_x, float set_y, float set_z);
 	void setTex(float set_u, float set_v);
@@ -24,37 +17,34 @@ public:
 
 class polygon 
 {
-	static int vert_i;
 	int vert_count;
 	vertex* vertices;
 public:
-	polygon () {};
-	polygon (int count);
-	~polygon ();
-	void addVertex(const vertex add_v);
+	polygon (int count = 3);
+	virtual ~polygon ();
+	void addVertex(int index, const vertex add_v);
+	void glVertex(int index, float r, float g, float b);
 	void glVertices();
 	virtual void glPolygon();
 };
 
 class triangle : public polygon 
 {
-	static int vert_i;
-	static int vert_count;
-	vertex vertices[3];
+	int vert_count;
+	vertex *vertices;
 public:
-	triangle () {};
+	triangle () : polygon(3), vert_count(3){};
 	~triangle (){};
 	virtual void glPolygon();
 };
 
 class quad : public polygon
 {
-	static int vert_i;
-	static int vert_count;
-	vertex vertices[4];
+	int vert_count;
+	vertex *vertices;
 public:
-	quad ();
-	~quad ();
+	quad () : polygon(4), vert_count(4) {};
+	~quad () {};
 	virtual void glPolygon();
 };
 
