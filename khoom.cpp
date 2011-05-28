@@ -46,7 +46,8 @@ GLfloat LightAmbient[]  = {0.5f, 0.5f, 0.5f, 1.0f};
 GLfloat LightDiffuse[]  = {1.0f, 1.0f, 1.0f, 1.0f}; 
 GLfloat LightPosition[] = {0.0f, 0.0f, 2.0f, 1.0f};
 
-GLuint filter = 0;       // texture filtering method to use (nearest, linear, linear + mipmaps)
+interior prism("prism.txt");
+interior world("world.txt");
 
 void init(int Width, int Height)
 {
@@ -63,52 +64,8 @@ void init(int Width, int Height)
 
   glMatrixMode(GL_MODELVIEW);
 		
+	//addVertex
 
-	
-
-  front.addVertex(0, vertex(1.0f, 1.5f, 0.0f, 0.0f, 0.0f));//1
-  front.addVertex(1, vertex( 1.5f, 0.0f, 0.0f, 0.0f, 0.0f));//2
-  front.addVertex(2, vertex( 1.0f,-1.5f, 0.0f, 0.0f, 0.0f));//3
-  front.addVertex(3, vertex(-1.0f,-1.5f, 0.0f, 0.0f, 0.0f));//4
-  front.addVertex(4, vertex(-1.5f,0.0f, 0.0f, 0.0f, 0.0f));//5	
-  front.addVertex(5, vertex(-1.0f,1.5f, 0.0f, 0.0f, 0.0f));//6	
-	//back
-  back.addVertex(0, vertex(1.0f, 1.5f, -1.5f, 0.0f, 0.0f));//1'
-  back.addVertex(1, vertex( 1.5f, 0.0f, -1.5f, 0.0f, 0.0f));//2'
-  back.addVertex(2, vertex( 1.0f,-1.5f, -1.5f, 0.0f, 0.0f));//3'
-  back.addVertex(3, vertex(-1.0f,-1.5f, -1.5f, 0.0f, 0.0f));//4'
-  back.addVertex(4, vertex(-1.5f,0.0f, -1.5f, 0.0f, 0.0f));//5'
-  back.addVertex(5, vertex(-1.0f,1.5f, -1.5f, 0.0f, 0.0f));//6'	
-	//middle1
-  m1.addVertex(0, vertex(1.0f, 1.5f, 0.0f, 0.0f, 0.0f));//1
-  m1.addVertex(1, vertex(1.0f, 1.5f, -1.5f, 0.0f, 0.0f));//1'
-  m1.addVertex(2, vertex( 1.5f, 0.0f, -1.5f, 0.0f, 0.0f));//2'
-  m1.addVertex(3, vertex( 1.5f, 0.0f, 0.0f, 0.0f, 0.0f));//2
-	//middle2
-  m2.addVertex(0, vertex( 1.5f, 0.0f, 0.0f, 0.0f, 0.0f));//2
-  m2.addVertex(1, vertex( 1.5f, 0.0f, -1.5f, 0.0f, 0.0f));//2'
-  m2.addVertex(2, vertex( 1.0f,-1.5f, -1.5f, 0.0f, 0.0f));//3'
-  m2.addVertex(3, vertex( 1.0f,-1.5f, 0.0f, 0.0f, 0.0f));//3
-	//middle3
-  m3.addVertex(0, vertex( 1.0f,-1.5f, 0.0f, 0.0f, 0.0f));//3
-  m3.addVertex(1, vertex( 1.0f,-1.5f, -1.5f, 0.0f, 0.0f));//3'
-  m3.addVertex(2, vertex(-1.0f,-1.5f, -1.5f, 0.0f, 0.0f));//4'
-  m3.addVertex(3, vertex(-1.0f,-1.5f, 0.0f, 0.0f, 0.0f));//4
-	//middle4
-  m4.addVertex(0, vertex(-1.0f,-1.5f, 0.0f, 0.0f, 0.0f));//4
-  m4.addVertex(1, vertex(-1.0f,-1.5f, -1.5f, 0.0f, 0.0f));//4'
-  m4.addVertex(2, vertex(-1.5f,0.0f, -1.5f, 0.0f, 0.0f));//5'
-  m4.addVertex(3, vertex(-1.5f,0.0f, 0.0f, 0.0f, 0.0f));//5	
-	//middle5
-  m5.addVertex(0, vertex(-1.5f,0.0f, 0.0f, 0.0f, 0.0f));//5	
-  m5.addVertex(1, vertex(-1.5f,0.0f, -1.5f, 0.0f, 0.0f));//5'
-  m5.addVertex(2, vertex(-1.0f,1.5f, -1.5f, 0.0f, 0.0f));//6'	
-  m5.addVertex(3, vertex(-1.0f,1.5f, 0.0f, 0.0f, 0.0f));//6	
-	//middle6
-  m6.addVertex(0, vertex(-1.0f,1.5f, 0.0f, 0.0f, 0.0f));//6	
-  m6.addVertex(1, vertex(-1.0f,1.5f, -1.5f, 0.0f, 0.0f));//6'	
-  m6.addVertex(2, vertex(1.0f, 1.5f, -1.5f, 0.0f, 0.0f));//1'
-  m6.addVertex(3, vertex(1.0f, 1.5f, 0.0f, 0.0f, 0.0f));//1
 }
 
 void display()
@@ -131,6 +88,9 @@ void display()
 
     glTranslatef(xtrans, ytrans, ztrans);    
 
+		//glColor3f(0.5, 1.0f,0.2); 
+		//world.display();
+
     //glBindTexture(GL_TEXTURE_2D, texture[filter]);   
 
     //triangle_count = sector1.triangle_count;
@@ -140,7 +100,6 @@ void display()
 	
     //}
 		
-		//glColor3f(something, 1.0f - something, something * 0.2); 
 		//test.glPolygon();
 		usleep(1000);
     
@@ -151,55 +110,11 @@ void display()
 	glTranslatef(0.0f,0.0f,-6.0f);		
 	glRotatef(rtrp, 0.0f, 1.0f, 0.0f);
 
-	glBegin(GL_POLYGON);
-	front.glVertex(0,1.0f, 0.0f, 0.0f); 
-	front.glVertex(1,0.0f, 1.0f, 0.0f); 
-	front.glVertex(2,0.0f, 0.0f, 1.0f); 
-	front.glVertex(3,1.0f, 1.0f, 0.0f); 
-	front.glVertex(4,0.0f, 1.0f, 1.0f); 
-	front.glVertex(5,1.0f, 0.0f, 1.0f);
-  glEnd();	
+	//paint
+		//std::cout << "AAA\n";
+	glColor3f(0.5f, 1.0f,0.2f); 
+	world.display();
 
-	glBegin(GL_POLYGON);
-	back.glVertex(0,0.5f, 0.0f, 0.0f); 
-	back.glVertex(1,0.0f, 0.5f, 0.0f); 
-	back.glVertex(2,0.0f, 0.0f, 0.5f); 
-	back.glVertex(3,0.5f, 0.5f, 0.0f); 
-	back.glVertex(4,0.0f, 0.5f, 0.5f); 
-	back.glVertex(5,0.5f, 0.0f, 0.5f); 
-  glEnd();	
-	//middle1
-	glBegin(GL_QUADS);
-	m1.glVertex(0,1.0f, 0.0f, 0.0f); 
-	m1.glVertex(1,0.5f, 0.0f, 0.0f); 
-	m1.glVertex(2,0.0f, 0.5f, 0.0f); 
-	m1.glVertex(3,0.0f, 1.0f, 0.0f); 
-	//middle2
-	m2.glVertex(0,0.0f, 1.0f, 0.0f); 
-	m2.glVertex(1,0.0f, 0.5f, 0.0f); 
-	m2.glVertex(2,0.0f, 0.0f, 0.5f); 
-	m2.glVertex(3,0.0f, 0.0f, 1.0f); 
-	//middle3
-	m3.glVertex(0,0.0f, 0.0f, 1.0f); 
-	m3.glVertex(1,0.0f, 0.0f, 0.5f); 
-	m3.glVertex(2,0.5f, 0.5f, 0.0f); 
-	m3.glVertex(3,1.0f, 1.0f, 0.0f); 
-	//middle4
-	m4.glVertex(0,1.0f, 1.0f, 0.0f); 
-	m4.glVertex(1,0.5f, 0.5f, 0.0f); 
-	m4.glVertex(2,0.0f, 0.5f, 0.5f); 
-	m4.glVertex(3,0.0f, 1.0f, 1.0f); 
-	//middle5
-	m5.glVertex(0,0.0f, 1.0f, 1.0f); 
-	m5.glVertex(1,0.0f, 0.5f, 0.5f); 
-	m5.glVertex(2,0.5f, 0.0f, 0.5f); 
-	m5.glVertex(3,1.0f, 0.0f, 1.0f); 
-	//middle6
-	m6.glVertex(0,1.0f, 0.0f, 1.0f); 
-	m6.glVertex(1,0.5f, 0.0f, 0.5f); 
-	m6.glVertex(2,0.5f, 0.0f, 0.0f); 
-	m6.glVertex(3,1.0f, 0.0f, 0.0f); 
-  glEnd();	
 		glFlush();
     glutSwapBuffers();
 }

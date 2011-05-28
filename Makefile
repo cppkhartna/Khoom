@@ -4,16 +4,16 @@ LIBDIR= -L/usr/X11R6/lib
 CXX = g++
 CFLAGS = -Wall -g -lX11 -lXi -lXmu -lglut -lGL -lGLU -lm -lstdc++ -ldl 
 
-SRCS = world.cpp 
+#SRCS =  BmpLoad.cpp MultiTexture.cpp  
+SRCS =  khoom.cpp reader.cpp BmpLoad.cpp world.cpp
 OBJS = $(SRCS:.cpp=.o)
-
 default: khoom
 
 %.o: %.cpp %.hpp 
 	#$(CXX) $(CFLAGS) -c $< -o $@
 	$(CXX) $(CFLAGS)  -c $< -o $@ 
 
-khoom: khoom.cpp $(OBJS)
+khoom: $(OBJS)
 	$(CXX) $(CFLAGS) $^ -o $@
 
 ifneq (clean, $(MAKECMDGOALS))
