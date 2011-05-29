@@ -1,0 +1,4 @@
+TEXTURES 3
+tree.bmp
+sunset.bmp
+mud.bmp

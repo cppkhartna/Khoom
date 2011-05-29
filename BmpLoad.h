@@ -4,5 +4,6 @@
 
 unsigned char *LoadIndexedBMPFile(const char *path,int *width,int *height);
 unsigned char *LoadTrueColorBMPFile(const char *path,int *width,int *height);
+unsigned char *LoadBMPFile(const char *path,int *width,int *height);
 
 #endif

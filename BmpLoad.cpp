@@ -78,3 +78,10 @@ unsigned char *LoadTrueColorBMPFile(const char *path,int *width,int *height)
 	return result;
 }
 
+unsigned char *LoadBMPFile(const char *path,int *width,int *height)
+{
+	unsigned char *result = NULL;
+	if ((result = LoadTrueColorBMPFile(path, width, height)) == NULL)
+			result = LoadIndexedBMPFile(path, width, height);
+	return result;
+}

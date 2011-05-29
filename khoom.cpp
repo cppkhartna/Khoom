@@ -1,5 +1,6 @@
 #include "khoom.hpp"
 #include "world.hpp"
+#include "reader.hpp"
 
 #define ESCAPE 27
 #define PAGE_UP 73
@@ -10,15 +11,10 @@
 #define RIGHT_ARROW 77
 
 
-polygon front(6);
-polygon back(6);
-quad m1, m2, m3, m4, m5, m6;
-
 GLfloat rtri;
 GLfloat rtrq;
 GLfloat rtrp;
 GLuint loop;             // general loop variable
-GLuint texture[3];       // storage for 3 textures;
 float something = 0.5f;
 
 int light = 0;           // lighting on/off
@@ -46,11 +42,28 @@ GLfloat LightAmbient[]  = {0.5f, 0.5f, 0.5f, 1.0f};
 GLfloat LightDiffuse[]  = {1.0f, 1.0f, 1.0f, 1.0f}; 
 GLfloat LightPosition[] = {0.0f, 0.0f, 2.0f, 1.0f};
 
-interior prism("prism.txt");
+//interior prism("prism.txt");
 interior world("world.txt");
+interior simple("simple.txt");
+
+int bk_width;
+int bk_width2;
+int bk_height;
+int bk_height2;
+unsigned char *bk_bits;
+unsigned char *bk_bits1;
+unsigned char *bk_bits2;
+GLuint texture[100];     // storage for 100 textures;
+
 
 void init(int Width, int Height)
 {
+	using namespace std;
+	ifstream file;      
+	string oneline;
+	int total = 0;
+	int pos;
+
   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);	
   glClearDepth(1.0);				
   glDepthFunc(GL_LESS);			
@@ -64,7 +77,67 @@ void init(int Width, int Height)
 
   glMatrixMode(GL_MODELVIEW);
 		
-	//addVertex
+	file.open("textures.txt");
+	if (file.fail())
+	{
+		cout << "Error opening file: textures.txt" << endl;
+		exit(1);
+	}
+
+	getline(file, oneline, '\n');
+	sscanf(oneline.c_str(), "TEXTURES %d\n", &total);
+    
+	glEnable(GL_TEXTURE_2D);                    // Enable texture mapping.
+
+	for (int i = 0; i < total; i++)
+	{
+
+		getline(file, oneline, '\n');
+		if (oneline.length() > 0)
+		{
+			if((bk_bits1=LoadBMPFile(oneline.c_str(), &bk_width, &bk_height))== NULL)
+			{
+				cout << "Error loading texture: " << oneline << endl;	
+				exit(20*i+2);
+			}
+			pos = oneline.find(".");
+			oneline.replace(pos, 10, "_alpha.bmp");
+
+			unsigned char *bk_bits = new unsigned char [bk_width*bk_height*4];
+
+			bk_bits2=LoadBMPFile(oneline.c_str(), &bk_width2, &bk_height2);
+			for (int j = 0; j < bk_width*bk_height; j++) 
+			{
+				bk_bits[4*j] = bk_bits1[3*j];
+				bk_bits[4*j + 1] = bk_bits1[3*j + 1];
+				bk_bits[4*j + 2] = bk_bits1[3*j + 2];
+				if (bk_bits2 == NULL)
+					bk_bits[4*j + 3] = (unsigned char) 255;
+				else
+				  bk_bits[4*j + 3] = (unsigned char)(((int)bk_bits2[3*j] + (int)bk_bits2[3*j + 1] + (int)bk_bits2[3*j + 2])/3);
+			}
+	
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+			glGenTextures(1, &texture[i]);
+			glActiveTexture(GL_TEXTURE0); 
+			glBindTexture(GL_TEXTURE_2D, texture[i]);
+			//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, bk_width, bk_height, 0, GL_RGB,
+							 //GL_UNSIGNED_BYTE,bk_bits);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
+
+			gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA, bk_width, bk_height, GL_RGBA,
+							 GL_UNSIGNED_BYTE,bk_bits);
+			glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
+		}
+
+	}
+		
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+
 
 }
 
@@ -88,19 +161,9 @@ void display()
 
     glTranslatef(xtrans, ytrans, ztrans);    
 
-		//glColor3f(0.5, 1.0f,0.2); 
-		//world.display();
-
     //glBindTexture(GL_TEXTURE_2D, texture[filter]);   
 
-    //triangle_count = sector1.triangle_count;
 
-    //for (loop=0; loop<triangle_count; loop++) 
-		//{     
-	
-    //}
-		
-		//test.glPolygon();
 		usleep(1000);
     
 	rtri += 0.2;
@@ -112,8 +175,12 @@ void display()
 
 	//paint
 		//std::cout << "AAA\n";
-	glColor3f(0.5f, 1.0f,0.2f); 
+	
+	//LoadGLTexture(texture[0], "mud.bmp");
+	//glBindTexture(GL_TEXTURE_2D, texture[1]);
 	world.display();
+	//simple.display();
+    
 
 		glFlush();
     glutSwapBuffers();
@@ -201,9 +268,10 @@ void idle()
 	display();
 }
 
+extern GLuint text[3];
+
 int main(int argc, char *argv[])
 {
-
 		using namespace std;
 
 		glutInit(&argc, argv);  

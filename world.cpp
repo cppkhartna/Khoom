@@ -51,12 +51,10 @@ void vertex::setColors(float set_r, float set_g, float set_b)
 }
 void vertex::glCoords()
 {
-	if (u*u + v*v != 0)
-		glTexCoord2f(u, v);
+	glMultiTexCoord2f(GL_TEXTURE0, u, v);
 	if (r*r + g*g + b*b != 0)
 		glColor3f(r, g, b);
-	if (x*x + y*y + z*z != 0)
-		glVertex3f(x, y, z);
+	glVertex3f(x, y, z);
 }
 
 vertex& vertex::operator=(const vertex vert)
@@ -71,17 +69,76 @@ vertex& vertex::operator=(const vertex vert)
 	b = vert.b;
 	return *this;
 }
+	
+vertex vertex::operator-(const vertex v1)
+{
+	vertex aux;
+	aux = vertex(x - v1.x, y - v1.y, z - v1.z, 0, 0, 0, 0, 0);
+	return aux;
+}
+
+vertex vertex::operator+(const vertex v1)
+{
+	vertex aux;
+	aux = vertex(x + v1.x, y + v1.y, z + v1.z, 0, 0, 0, 0, 0);
+	return aux;
+}
+vertex vertex::operator*(const vertex v1)
+{
+	vertex aux;
+	aux = vertex(y*v1.z - z*v1.y, z*v1.x - x*v1.z, x*v1.y - y*v1.x, 0, 0, 0, 0, 0);
+	return aux;
+}
+
+vertex vertex::operator/(float lambda)
+{
+	vertex aux;
+	aux = vertex(x/lambda, y/lambda, z/lambda, 0, 0, 0, 0, 0);
+	return aux;
+}
+
+void vertex::Normal()
+{
+	glNormal3f(x, y, z);
+}
 
 polygon::polygon(int count)
 {
 	vert_count = count;
 	vertices = new vertex[count];
+	flag = false;
 }
 	
 polygon::~polygon()
 {
 	vert_count = 0;
 	delete [] vertices;
+}
+	
+void polygon::Normal()
+{
+	if (!flag)
+	{
+		vertex vector1, vector2, inception;
+		float d;
+		vector1 = vertices[1] - vertices[0];
+		vector2 = vertices[2] - vertices[1];
+		normal = vector1*vector2;
+		inception = vertex(0.0f, 0.0f, 0.0f, 0,0, 0,0,0);
+		d = distance(normal, inception);
+		if (d < 0.00001)
+		{
+			std::cout << "Нулевой вектор нормали:" << (float) d << std::endl;
+		}
+		else
+		{
+			normal = normal/d;
+			normal.Normal();
+		}
+		flag = !flag;
+	}
+	else
+		normal.Normal();
 }
 
 void polygon::addVertex(int index, const vertex add_v)
@@ -91,6 +148,8 @@ void polygon::addVertex(int index, const vertex add_v)
 
 void polygon::glVertices()
 {
+	Normal();
+
 	for (int i = 0; i < vert_count; i++)
 	{
 		vertices[i].glCoords();
@@ -161,8 +220,10 @@ interior::interior(const char* path)
 		ifstream file;      
 		string oneline;
 		int i = 0, j = 0, k = 0;
-		int h1 = 0, l = 0, f = 0;
+		int h1 = 0, l = 0; 
+		int f = 0;
 		char s[20];
+		int num = 0;
 
 		file.open(path);
 		if (file.fail())
@@ -189,10 +250,38 @@ interior::interior(const char* path)
 						j = 4;
 					else if (!strcmp("TRIANGLES", s))
 						j = 3;
-								
+					else if (!strcmp("TEXTURES", s))
+					{
+						//textures
+						tex = i;
+						if (tex > 0)
+							textures = new int[tex];
+							for (f = 0; f < tex; f++)
+							{
+								getline(file, oneline, '\n');
+								if (oneline.length() > 0)
+								{
+									sscanf(oneline.c_str(), "%d\n", &num);
+									textures[f] = num;
+								}
+							}
+						i = 0;
+					}
+					//polygons			
 					for (h1 = 0; h1 < i; h1++)
 					{
-						frames[k] = new polygon(j);
+						switch (j)
+						{
+							case 3:
+								frames[k] = new triangle;
+							break;
+							case 4:
+								frames[k] = new quad;
+							break;
+							default:
+								frames[k] = new polygon(j);
+							break;
+						}
 						for (l = 0; l < j; l++)
 						{
 							do
@@ -207,23 +296,6 @@ interior::interior(const char* path)
 						}
 						k++; //next polygon
 					}
-					if (sscanf(oneline.c_str(), "%d TEXTURES\n", &tex) == 2)
-					{
-						if (tex > 0)
-							textures = new GLuint[tex];
-							for (f = 0; f < tex; f++)
-							{
-								getline(file, oneline, '\n');
-								if (oneline.length() > 0)
-								{
-				 					if (!LoadGLTexture(textures[f], oneline.c_str())) 
-									{
-										cout << "Error loading texture: " << oneline << endl;	
-										exit(100);
-									}
-								}
-							}
-					}
 				}
 			}
 		}
@@ -237,11 +309,15 @@ interior::interior(const char* path)
 
 interior::~interior()
 {
-	delete[] frames;
+	if (total)
+		delete[] frames;
+	if (tex)
+		delete[] textures;
 }
 
 void interior::display()
 {
+	glBindTexture(GL_TEXTURE_2D, texture[textures[0]]); 
 	for (int i = 0; i < total; i++)
 	{
 		frames[i]->glPolygon();

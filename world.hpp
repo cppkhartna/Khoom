@@ -1,5 +1,7 @@
 #include "khoom.hpp"
 
+extern GLuint texture[100];
+
 class vertex 
 {
 	GLfloat x, y, z; //3d
@@ -17,12 +19,19 @@ public:
 	void glCoords();
 	vertex& operator=(const vertex vert);
 	friend float distance(vertex v1, vertex v2);
+	vertex operator-(const vertex v1); // точка = радиус-вектор
+	vertex operator+(const vertex v1);
+	vertex operator*(const vertex v1); //векторное
+	vertex operator/(float lambda);
+	void Normal();
 };
 
 class polygon 
 {
 	int vert_count;
 	vertex* vertices;
+	vertex normal;
+	int flag;
 public:
 	polygon (int count = 3);
 	virtual ~polygon ();
@@ -30,12 +39,15 @@ public:
 	void glVertices();
 	void glColorize(int index, float r, float g, float b);
 	virtual void glPolygon();
+	void Normal();
 };
 
 class triangle : public polygon 
 {
 	int vert_count;
 	vertex *vertices;
+	vertex normal;
+	int flag;
 public:
 	triangle () : polygon(3), vert_count(3){};
 	~triangle (){};
@@ -46,6 +58,8 @@ class quad : public polygon
 {
 	int vert_count;
 	vertex *vertices;
+	vertex normal;
+	bool flag;
 public:
 	quad () : polygon(4), vert_count(4) {};
 	~quad () {};
@@ -58,7 +72,7 @@ float distance(vertex v1, vertex v2);
 class interior 
 {
 	polygon** frames;
-	GLuint* textures;
+	int* textures;
 	int total;
 	int tex;
 public:
