@@ -11,3 +11,4 @@
 #include <string>
 #include <cstring>
 #include "BmpLoad.h"
+

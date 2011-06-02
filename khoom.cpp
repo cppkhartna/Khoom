@@ -1,6 +1,5 @@
 #include "khoom.hpp"
 #include "world.hpp"
-#include "reader.hpp"
 
 #define ESCAPE 27
 #define PAGE_UP 73
@@ -10,15 +9,24 @@
 #define LEFT_ARROW 75
 #define RIGHT_ARROW 77
 
+#define BEZ_NUM 6
+
+const double Pi = 3.1415;
 
 GLfloat rtri;
 GLfloat rtrq;
 GLfloat rtrp;
 GLuint loop;             // general loop variable
 float something = 0.5f;
+int divs;
+float t = 0;
+
+double x_angle = 30;
+double y_angle = 0;
 
 int light = 0;           // lighting on/off
 int blend = 0;        // blending on/off
+bool lines = true; //for mountains
 
 GLfloat xrot;            // x rotation
 GLfloat yrot;            // y rotation
@@ -45,6 +53,16 @@ GLfloat LightPosition[] = {0.0f, 0.0f, 2.0f, 1.0f};
 //interior prism("prism.txt");
 interior world("world.txt");
 interior simple("simple.txt");
+interior land("map3_landscape.txt");
+bpatch bezier("bezier.txt");
+interior Fichte("Fichte.txt");
+interior Tree("tree.txt");
+
+const int GroundSize = 5;
+const double TreeSize = 1.0;
+const int treeCount = 30;
+
+double fichten[treeCount];
 
 int bk_width;
 int bk_width2;
@@ -55,6 +73,88 @@ unsigned char *bk_bits1;
 unsigned char *bk_bits2;
 GLuint texture[100];     // storage for 100 textures;
 
+unsigned char* map;
+int mapx;
+int mapy;
+
+GLuint cube;
+GLuint torus;
+GLuint fichte;
+GLuint tree;
+
+
+void landscape(const char* path, float x0, float y0)
+{
+	using namespace std;
+	if((map=LoadBMPFile(path, &mapx, &mapy))== NULL)
+			{
+				cout << "Error loading texture: " << path << endl;	
+				exit(33);
+			}
+	ofstream file;      
+	string oneline;
+	int total = 0;
+	int save_j = 0;
+	int pos;
+
+	oneline = path;
+	pos = oneline.find(".");
+	oneline.replace(pos, 30, "_landscape.txt");
+
+	file.open(oneline.c_str());
+	if (file.fail())
+	{
+		cout << "Error opening file:" << oneline << endl;
+		exit(1);
+	}
+
+	file << "TOTAL " << mapx*mapy << endl;
+	file << "QUADS " << mapx*mapy << endl;
+
+	for (int j = 0; j < mapx*mapy; j++) 
+	{
+		if (j == mapx) 
+			j++;
+
+		if (!(map[3*j] >= 250 && map[3*j+1] >= 250 && map[3*j+2] >= 250)
+			&& !(map[3*j] <= 5 && map[3*j+1] <= 5 && map[3*j+2] <= 5))
+		{
+			save_j = j;
+			for (int k = 0; k < 4; k++)
+			{
+					switch (k)
+					{
+						case 0:
+							j = save_j;
+						break;
+						case 1:
+							j = save_j + 1;
+						break;
+						case 2:
+							j = save_j + mapx + 1;
+						break;
+						case 3:
+							j = save_j + mapx;
+						break;
+					}
+					file << (float) x0 -  (j/(mapx-1)) << " " << 
+				  (float) ((3.4/1.4)*sqrt(map[3*j]*map[3*j] + (255-map[3*j+1])*(255-map[3*j+1]))/255 - map[3*j+2]/255 + 0.6)*5 - 20  << " "
+					<< (float) y0 - (j % mapy)
+					<< " 0.0 0.0 " << (float) map[3*j]/255 << " " << (float) map[3*j+1]/255 << " " << (float) map[3*j+2]/255 << endl ;
+			}
+			j = save_j;
+			total++;
+		}
+	}
+	
+	file << "TEXTURES 0" << endl;
+
+	file.seekp(0);
+	file << "TOTAL " << total << endl;
+	file << "QUADS " << total << endl;
+	file.close();
+	
+}
 
 void init(int Width, int Height)
 {
@@ -101,7 +201,7 @@ void init(int Width, int Height)
 				exit(20*i+2);
 			}
 			pos = oneline.find(".");
-			oneline.replace(pos, 10, "_alpha.bmp");
+			oneline.replace(pos, 20, "_alpha.bmp");
 
 			unsigned char *bk_bits = new unsigned char [bk_width*bk_height*4];
 
@@ -121,8 +221,7 @@ void init(int Width, int Height)
 			glGenTextures(1, &texture[i]);
 			glActiveTexture(GL_TEXTURE0); 
 			glBindTexture(GL_TEXTURE_2D, texture[i]);
-			//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, bk_width, bk_height, 0, GL_RGB,
-							 //GL_UNSIGNED_BYTE,bk_bits);
+
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -137,50 +236,147 @@ void init(int Width, int Height)
 		
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    
+	glLightfv(GL_LIGHT1, GL_AMBIENT, LightAmbient);  // add lighting. (ambient)
+  glLightfv(GL_LIGHT1, GL_DIFFUSE, LightDiffuse);  // add lighting. (diffuse).
+  glLightfv(GL_LIGHT1, GL_POSITION,LightPosition); // set light position.
+  glEnable(GL_LIGHT1);                             // turn light 1 on.
+	
+	for (int i = 0; i < treeCount; i++)
+		fichten[i] = -GroundSize + TreeSize + 2*rand()*(GroundSize - TreeSize)/RAND_MAX;
 
-
+// основные display lists
+	
+	cube = gen::cube();
+	torus = gen::torus(2.0,0.5,25,20); 
+	//fichte = gen::other(Fichte);
+	tree = gen::other(Tree);
 }
+
+interior room("room.txt");
 
 void display()
 {
-    //GLfloat x_m, y_m, z_m, u_m, v_m;
-    GLfloat xtrans, ztrans, ytrans;
-    GLfloat sceneroty;
-    //int triangle_count;
+  GLfloat xtrans, ztrans, ytrans;
+  GLfloat sceneroty;
 
-    xtrans = -xpos;
-    ztrans = -zpos;
-    ytrans = -walkbias-0.25f;
-    sceneroty = 360.0f - yrot;
+  xtrans = -xpos;
+  ztrans = -zpos;
+  ytrans = -walkbias-0.25f;
+  sceneroty = 360.0f - yrot;
     	
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);		
-    glLoadIdentity();
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);		
+  glLoadIdentity();
 
-    glRotatef(lookupdown, 1.0f, 0, 0);
-    glRotatef(sceneroty, 0, 1.0f, 0);
+  glRotatef(lookupdown, 1.0f, 0, 0);
+  glRotatef(sceneroty, 0, 1.0f, 0);
+	
+  glTranslatef(xtrans, ytrans, ztrans);    
 
-    glTranslatef(xtrans, ytrans, ztrans);    
+	//волны с помощью B-spline (кривых Безье)
+	
+	glTranslatef(0, 0, -20);
+	int k = 1;
 
-    //glBindTexture(GL_TEXTURE_2D, texture[filter]);   
+	bezier.dlBPatch = gen::bezier(bezier);
+	for (int j = 0; j < BEZ_NUM; j++)
+	{
+		glTranslatef(-1.50*BEZ_NUM+0.75*k, 0, 1.50);
+		for (int i = 0; i < BEZ_NUM; i++)
+		{
+			glTranslatef(1.50, 0, 0);
+			bezier.display();
+		}	
+		k = -k;
+	}
+	
+	glTranslatef(0, 0, 10);
+	glRotatef(180*piover180, 0, 1, 0);
 
+	//комната
+	world.display();
+	// горы, сгенерированные из bmp
+	land.display(lines);
 
-		usleep(1000);
+	//хвойный лес из billboards
+	
+	//glTranslatef(10, 0, 10);
+	glRotatef(180*piover180, 0, 1, 0);
+		
+	glEnable(GL_ALPHA_TEST);
+	glAlphaFunc(GL_GREATER, 0.05);
+	
+	for (int i = 0; i < treeCount; i++) 
+	{
+		int index = (yrot > 180) ? (i) : (treeCount - 1 - i);
+		double x = -GroundSize + TreeSize + 2*(GroundSize - TreeSize)*index/(treeCount - 1);
+		double z = fichten[index];
+
+		glPushMatrix();
+
+		//glLoadIdentity();
+		glTranslated(0,0,-3*GroundSize);
+		glRotated(xrot,1,0,0);
+		glRotated(yrot,0,1,0);
+		glTranslated(x,0,z);
+		glRotated(-yrot,0,1,0);
+		glRotated(-xrot,1,0,0);
+
+		Fichte.display();
+
+		glPopMatrix();
+	}
+	
+	glDisable(GL_ALPHA_TEST);
+	
+	glTranslatef(-10, 0, -10);
+
+  usleep(1000);
     
 	rtri += 0.2;
 	rtrq -=0.15;
 	rtrp +=0.35;
 	
+	
 	glTranslatef(0.0f,0.0f,-6.0f);		
 	glRotatef(rtrp, 0.0f, 1.0f, 0.0f);
 
-	//paint
-		//std::cout << "AAA\n";
-	
-	//LoadGLTexture(texture[0], "mud.bmp");
-	//glBindTexture(GL_TEXTURE_2D, texture[1]);
-	world.display();
 	//simple.display();
-    
+	
+	//antialiasing
+	//glEnable(GL_MULTISAMPLE_ARB);
+	//glDisable(GL_BLEND);
+	
+		//glActiveTexture(GL_TEXTURE0_ARB);
+		//glEnable(GL_TEXTURE_2D);
+		//glBindTexture(GL_TEXTURE_2D, texture[0]); 
+		//glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
+		//glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_REPLACE);
+
+		//glActiveTexture(GL_TEXTURE1_ARB);
+		//glEnable(GL_TEXTURE_2D);
+		//glBindTexture(GL_TEXTURE_2D, texture[1]); 
+		//glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
+		//glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_ADD);
+
+	//glEnable(GL_TEXTURE_GEN_S); // Задаем автоматическую генерацию текстурных координат для 0 текстуры
+	//glEnable(GL_TEXTURE_GEN_T);
+	//glTexGeni(GL_S,GL_TEXTURE_GEN_MODE,GL_SPHERE_MAP);
+	//glTexGeni(GL_T,GL_TEXTURE_GEN_MODE,GL_SPHERE_MAP);
+
+	//glCallList(torus);
+
+	//glDisable(GL_TEXTURE_GEN_S); // Отключаем автоматическую генерацию текстурных координат для 0 текстуры
+	//glDisable(GL_TEXTURE_GEN_T);
+
+		//glActiveTexture(GL_TEXTURE1_ARB);
+	//glDisable(GL_TEXTURE_2D);
+		//glActiveTexture(GL_TEXTURE0_ARB);
+	//glDisable(GL_TEXTURE_2D);
+	
+	//glEnable(GL_MULTISAMPLE_ARB);
+	
+	//glDisable(GL_TEXTURE_2D);
 
 		glFlush();
     glutSwapBuffers();
@@ -208,6 +404,22 @@ void keyPressed(unsigned char key, int x, int y)
     case ESCAPE: 
 			exit(1);                   	
 		break; 
+		//hills:
+    case 'h': 
+		case 'H':
+			lines = !lines;                   	
+		break; 
+    case 'L': 
+    case 'l': // switch the lighting.
+	printf("L/l pressed; light is: %d\n", light);
+	light = light ? 0 : 1;              // switch the current value of light, between 0 and 1.
+	printf("Light is now: %d\n", light);
+	if (!light) {
+	    glDisable(GL_LIGHTING);
+	} else {
+	    glEnable(GL_LIGHTING);
+	}
+	break;
 		}
 
 }
@@ -265,14 +477,23 @@ void specialKeyPressed(int key, int x, int y)
 void idle()
 {
 	something += 0.1;
+	t+=0.1;
+	divs = 7 + (int) (7.0*sin(t));
 	display();
 }
-
-extern GLuint text[3];
 
 int main(int argc, char *argv[])
 {
 		using namespace std;
+		
+		ifstream file;      
+		file.open("map3_landscape.txt");
+		if (file.fail())
+		{
+			landscape("map3.bmp", 55, 55);
+		}
+		else
+			file.close();
 
 		glutInit(&argc, argv);  
     glutInitWindowSize(640, 480);  

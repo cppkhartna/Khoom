@@ -1,4 +1,7 @@
-TEXTURES 3
-tree.bmp
-sunset.bmp
-mud.bmp
+TEXTURES 6
+Textures/colormap.bmp
+Textures/sunset.bmp
+Textures/mud.bmp
+Textures/Water.bmp
+Textures/tree.bmp
+Textures/Fichte.bmp

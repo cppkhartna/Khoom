@@ -5,7 +5,7 @@ CXX = g++
 CFLAGS = -Wall -g -lX11 -lXi -lXmu -lglut -lGL -lGLU -lm -lstdc++ -ldl 
 
 #SRCS =  BmpLoad.cpp MultiTexture.cpp  
-SRCS =  khoom.cpp reader.cpp BmpLoad.cpp world.cpp
+SRCS =  khoom.cpp BmpLoad.cpp world.cpp
 OBJS = $(SRCS:.cpp=.o)
 default: khoom
 
@@ -23,7 +23,7 @@ endif
 deps.mk: $(SRCS) 
 	$(CXX) -MM $^ > $@
 
-run: khawm
-	./khawm
+run: khoom
+	./khoom
 clean:
 	rm -f *.o 

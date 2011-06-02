@@ -1,0 +1,27 @@
+TOTAL 5
+QUADS 5
+//floor
+0 0 0
+4 0 0
+4 0 4
+0 0 4
+//wall-door - upper part
+4 1.5 0
+4 4 0
+4 4 4
+4 1.5 4
+//wall-door - left part
+4 0 1.5
+4 0 0
+4 1.5 0
+4 1.5 1.5
+//wall-door - right part
+4 0 4
+4 0 2
+4 1.5 2
+4 1.5 4
+//wall-window bottom
+0 0 0
+4 0 0
+4 1 0
+0 1 0
