@@ -10,7 +10,6 @@ OBJS = $(SRCS:.cpp=.o)
 default: khoom
 
 %.o: %.cpp %.hpp 
-	#$(CXX) $(CFLAGS) -c $< -o $@
 	$(CXX) $(CFLAGS)  -c $< -o $@ 
 
 khoom: $(OBJS)

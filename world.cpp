@@ -1,9 +1,5 @@
 #include "world.hpp"
 
-//world является интерфейсом игры
-
-//vertex
-
 vertex::vertex(const vertex& vert)
 {
 	x = vert.x;
@@ -14,6 +10,7 @@ vertex::vertex(const vertex& vert)
 	r = vert.r;
 	g = vert.g;
 	b = vert.b;
+	normal = NULL;
 }
 
 vertex::vertex(float c_x, float c_y, float c_z, float c_u, float c_v,
@@ -27,6 +24,7 @@ vertex::vertex(float c_x, float c_y, float c_z, float c_u, float c_v,
 	r = c_r;
 	g = c_g;
 	b = c_b;
+	normal = NULL;
 }
 
 void vertex::set3d(float set_x, float set_y, float set_z)
@@ -42,18 +40,38 @@ void vertex::setTex(float set_u, float set_v)
 	v = set_v;
 }
 
+void vertex::setNormal(vertex set_normal)
+{
+	if (normal == NULL)
+	  normal = new vertex(set_normal);
+	else
+	{
+		delete normal;
+	  normal = new vertex(set_normal);
+	}
+}
+
 void vertex::setColors(float set_r, float set_g, float set_b)
 {
 	r = set_r;
 	g = set_g;
 	b = set_b;
 }
-void vertex::glCoords()
+
+void vertex::glCoords(int tex)
 {
-	glMultiTexCoord2fARB(GL_TEXTURE0_ARB, u, v);
-	glMultiTexCoord2fARB(GL_TEXTURE1_ARB, u, v);
+	if (tex == 1)
+		glTexCoord2f(u, v);
+	else if (tex > 1)
+	{
+		glMultiTexCoord2fARB(GL_TEXTURE0_ARB, u, v);
+		for (int i = 1; i < tex; i++)
+			glMultiTexCoord2fARB(GLTexture[i], u, v);
+	}
 	if (r*r + g*g + b*b != 0)
 		glColor3f(r, g, b);
+	if (normal != NULL)
+		glNormal3f(normal->x, normal->y, normal->z);
 	glVertex3f(x, y, z);
 }
 
@@ -73,16 +91,21 @@ vertex& vertex::operator=(const vertex vert)
 vertex vertex::operator-(const vertex v1)
 {
 	vertex aux;
-	aux = vertex(x - v1.x, y - v1.y, z - v1.z, 0, 0, 0, 0, 0);
+	aux = vertex(x - v1.x, y - v1.y, z - v1.z, 
+							 u - v1.u, v - v1.v, 
+							 r - v1.r, g - v1.g, b - v1.b);
 	return aux;
 }
 
 vertex vertex::operator+(const vertex v1)
 {
 	vertex aux;
-	aux = vertex(x + v1.x, y + v1.y, z + v1.z, 0, 0, 0, 0, 0);
+	aux = vertex(x + v1.x, y + v1.y, z + v1.z,
+							 u + v1.u, v + v1.v, 
+							 r + v1.r, g + v1.g, b + v1.b);
 	return aux;
 }
+
 vertex vertex::operator*(const vertex v1)
 {
 	vertex aux;
@@ -90,17 +113,26 @@ vertex vertex::operator*(const vertex v1)
 	return aux;
 }
 
+int vertex::operator/(const vertex v1)
+{
+	return x*v1.x+y*v1.y+z*v1.z;
+}
+
 vertex vertex::operator*(float lambda)
 {
 	vertex aux;
-	aux = vertex(x*lambda, y*lambda, z*lambda, 0, 0, 0, 0, 0);
+	aux = vertex(x*lambda, y*lambda, z*lambda, 
+							 u*lambda, v*lambda, 
+							 r*lambda, g*lambda, b*lambda);
 	return aux;
 }
 
 vertex vertex::operator/(float lambda)
 {
 	vertex aux;
-	aux = vertex(x/lambda, y/lambda, z/lambda, 0, 0, 0, 0, 0);
+	aux = vertex(x/lambda, y/lambda, z/lambda, 
+							 u/lambda, v/lambda, 
+							 r/lambda, g/lambda, b/lambda);
 	return aux;
 }
 
@@ -144,7 +176,6 @@ void polygon::Normal()
 		vector1 = vertices[1] - vertices[0];
 		vector2 = vertices[2] - vertices[1];
 		normal = vector1*vector2;
-		inception = vertex(0.0f, 0.0f, 0.0f, 0,0, 0,0,0);
 		d = distance(normal, inception);
 		if (d < 0.00001)
 		{
@@ -159,6 +190,8 @@ void polygon::Normal()
 	}
 	else
 		normal.Normal();
+
+	D = - (vertices[0] / normal);
 }
 
 void polygon::addVertex(int index, const vertex add_v)
@@ -166,13 +199,13 @@ void polygon::addVertex(int index, const vertex add_v)
 	vertices[index] = add_v;
 }
 
-void polygon::glVertices()
+void polygon::glVertices(int tex)
 {
 	Normal();
 
 	for (int i = 0; i < vert_count; i++)
 	{
-		vertices[i].glCoords();
+		vertices[i].glCoords(tex);
 	}
 }
 
@@ -186,10 +219,10 @@ void polygon::glColorize(int index, float r, float g, float b)
 	else vertices[index].setColors(r, g, b);
 }
 
-void polygon::glPolygon()
+void polygon::glPolygon(int tex)
 {
 	glBegin(GL_POLYGON);
-			glVertices();
+			glVertices(tex);
 	glEnd();
 }
 
@@ -200,17 +233,50 @@ void polygon::glLines()
 	glEnd();
 }
 
-void triangle::glPolygon()
+triangle** polygon::divide(int& vert)
+{
+	vertex new_vertex;
+	vertex summ;
+	for (int i = 0; i < vert_count; i++)
+	{
+		summ = summ + vertices[i];	
+	}
+
+	new_vertex = summ / vert_count;
+	
+	triangle** result = new triangle* [vert_count];
+	for (int j = 0; j < vert_count; j++)
+	{
+		result[j] = new triangle;
+		result[j]->addVertex(0, vertices[j]);
+		result[j]->addVertex(1, vertices[(j+1)%vert_count]);
+		result[j]->addVertex(2, new_vertex); 
+	}	
+	vert = vert_count;
+	return result;
+}
+
+float polygon::operator-(vertex A)
+{
+	float d;
+	vertex inception;
+	if ((d = distance(normal, inception)) > 0.00001)
+		return (A/normal + D)/d;
+	else 
+	  return 0;
+}
+
+void triangle::glPolygon(int tex)
 {
 	glBegin(GL_TRIANGLES);
-			glVertices();
+			glVertices(tex);
 	glEnd();
 }
 
-void quad::glPolygon()
+void quad::glPolygon(int tex)
 {
 	glBegin(GL_QUADS);
-			glVertices();
+			glVertices(tex);
 	glEnd();
 }
 
@@ -220,25 +286,6 @@ float distance(vertex v1, vertex v2)
 				+ (v1.y - v2.y)*(v1.y - v2.y)
 				+ (v1.z - v2.z)*(v1.z - v2.z));
 }
-
-//quad* quad::divide(int n)
-//{
-	//float a, b;
-	//quad* aux;
-	//quad = new quad[n*n];
-	//float x, y, z;
-
-	//a = distance(vertices[0], vertices[1]);
-  //b = distance(vertices[1], vertices[2]);
-	
-	//for (int k = 0; k < 4; k++)
-	//{
-		//x = i*(n-1)*vertices[0]	
-	//}
-		
-	
-	//return 0;
-//}
 
 interior::interior(const char* path) 
 {
@@ -261,6 +308,13 @@ interior::interior(const char* path)
 
 		getline(file, oneline, '\n');
 		sscanf(oneline.c_str(), "TOTAL %d\n", &total);
+
+		save_total = total;
+		base = new data[total];
+		for (int w = 0; w < total; w++)
+		{
+			base[w].index = w;
+		}
 
 		frames = new polygon* [total]; 
 
@@ -331,7 +385,6 @@ interior::interior(const char* path)
 			exit(k*10 + 1);
 
     file.close();
-
 }
 
 interior::~interior()
@@ -342,34 +395,136 @@ interior::~interior()
 		delete[] textures;
 }
 
-void interior::display(bool lines)
+void interior::display(vertex* viewer, bool lines)
 {
-	if (tex >= 1)
+	if (viewer != NULL)
+		organize(*viewer);
+	else if (save_total != total)
 	{
-		glActiveTexture(GL_TEXTURE0_ARB);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, texture[textures[0]]); 
-		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
-		glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_REPLACE);
-
-		glActiveTexture(GL_TEXTURE1_ARB);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, texture[textures[tex - 1]]); 
-		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
-		glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_ADD);
+		vertex inception;
+		organize(inception);
 	}
+
+
 	for (int i = 0; i < total; i++)
 	{
 		if (!lines)
-			frames[i]->glPolygon();
+		{
+			TexturesOn();
+			frames[base[i].index]->glPolygon(tex);
+			TexturesOff();
+		}
 		else
 			frames[i]->glLines();
 	}
 		
-	glActiveTexture(GL_TEXTURE0_ARB);
-	glDisable(GL_TEXTURE_2D);
-	glActiveTexture(GL_TEXTURE1_ARB);
-	glDisable(GL_TEXTURE_2D);
+}
+	
+void interior::TexturesOn()
+{
+	if (tex >= 1)
+	{
+		glActiveTexture(GL_TEXTURE0_ARB);
+		glBindTexture(GL_TEXTURE_2D, gettex(0)); 
+		glEnable(GL_TEXTURE_2D);
+		if (tex > 1)
+		{
+			glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
+			glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_REPLACE);
+		}
+
+		for (int i = 1; i < tex; i++)
+		{
+			glActiveTexture(GLTexture[i]);
+			glEnable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, gettex(i)); 
+			glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
+			glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_ADD);
+		}
+	}
+}
+
+void interior::TexturesOff()
+{
+	if (tex >= 1)
+	{
+ 		glActiveTexture(GL_TEXTURE0_ARB);
+		glDisable(GL_TEXTURE_2D);
+		for (int i = 1; i < tex; i++)
+		{
+			glActiveTexture(GLTexture[i]);
+			glDisable(GL_TEXTURE_2D);
+		}
+	}
+}
+
+GLuint interior::gettex(int n)
+{
+	return texture[textures[n]];
+}
+
+void interior::divide(int n)
+{
+	using namespace std;
+	triangle** aux;
+	polygon** frames_new;
+	int count;
+	for (int i = 0; i < n; i++)
+	{
+		aux = frames[0]->divide(count);
+		frames_new = new polygon* [total + count - 1];
+		for (int j = 1; j < total; j++)
+		{
+			frames_new[j-1] = frames[j];
+		}
+		for (int k = 0; k < count; k++)
+		{
+			frames_new[total - 1 + k] = aux[k];
+		}
+		delete[] frames;
+		total += (count-1);
+		frames = new polygon* [total + count - 1];
+		frames = frames_new;
+	}
+}
+
+void interior::organize(vertex viewer)
+{
+
+	if (save_total != total)
+	{
+		if (base != NULL)
+			delete[] base;
+		base = new data[total];
+		save_total = total;
+	}
+	//считаем расстояния
+	
+	for (int h = 0; h < total; h++)
+	{
+		base[h].index = h;
+		base[h].key = *frames[h] - viewer;
+	}
+
+	//упорядочиваем
+	data aux;
+	bool ordnung = true;
+
+	for (int i = 0; i < total; i++)
+	{
+		for (int j = 0; j < total - 1; j++)
+		{
+			if (base[j].key < base[j+1].key)
+			{
+				aux = base[j];
+				base[j] = base[j+1];
+				base[j+1] = aux;	
+				ordnung = false;
+			}				
+		}
+		if (ordnung)
+			break;
+	}
 }
 
 GLuint gen::cube ()
@@ -397,138 +552,337 @@ GLuint gen::other(interior something)
 	return list;
 }
 
-inline void TorusVertex(double r1,double r2,double phi,double psi)
+torus::torus (float t_a, float t_r, int t_n, int t_m)
 {
-	double nx = cos(phi)*cos(psi);
-	double ny = sin(psi);
-	double nz = sin(phi)*cos(psi);
-	glNormal3d(nx,ny,nz);
-	glVertex3d(r1*cos(phi) + r2*nx,r2*ny,r1*sin(phi) + r2*nz);
+	a = t_a;
+	r = t_r;
+	R = a;
+	n = t_n;
+	m = t_m;
+	storage = new vertex* [n + 1];
+ 	for (int i = 0; i < n + 1; i++)
+	{
+		storage[i] = new vertex[m];
+	}
+	count();
+	tex = 0;
 }
 
-GLuint gen::torus (double r1,double r2,int n1,int n2)
+void torus::settorus (float t_a, float t_r, int t_n, int t_m)
 {
-	GLuint list = glGenLists(1);
-	if(!list)
-		return 0;
-	glNewList(list,GL_COMPILE);
-	glBegin(GL_QUADS);
-	for(int i = 0;i<n1;i++) {
-		int i2 = (i<n1-1)?(i+1):(0);
-		double phi1 = 2*i*Pi/n1;
-		double phi2 = 2*i2*Pi/n1;
-		for(int j = 0;j<n2;j++) {
-			int j2 = (j<n2-1)?(j+1):(0);
-			double psi1 = 2*j*Pi/n2;
-			double psi2 = 2*j2*Pi/n2;
-			glMultiTexCoord2dARB(GL_TEXTURE0, 5*i/(double)n1,j/(double)n2);
-			glMultiTexCoord2dARB(GL_TEXTURE1, 5*i/(double)n1,j/(double)n2);
-			TorusVertex(r1,r2,phi1,psi1);
-
-			glMultiTexCoord2dARB(GL_TEXTURE0,5*i/(double)n1,(j+1)/(double)n2);
-			glMultiTexCoord2dARB(GL_TEXTURE1,5*i/(double)n1,(j+1)/(double)n2);
-			TorusVertex(r1,r2,phi1,psi2);
-
-			glMultiTexCoord2dARB(GL_TEXTURE0, 5*(i+1)/(double)n1,(j+1)/(double)n2);
-			glMultiTexCoord2dARB(GL_TEXTURE1,5*i/(double)n1,(j+1)/(double)n2);
-			TorusVertex(r1,r2,phi2,psi2);
-
-			glMultiTexCoord2dARB(GL_TEXTURE0, 5*(i+1)/(double)n1,j/(double)n2);
-			glMultiTexCoord2dARB(GL_TEXTURE1,5*i/(double)n1,(j+1)/(double)n2);
-			TorusVertex(r1,r2,phi2,psi1);
-		}
+	a = t_a;
+	r = t_r;
+	R = a;
+	n = t_n;
+	m = t_m;
+	storage = new vertex* [n + 1];
+ 	for (int i = 0; i < n + 1; i++)
+	{
+		storage[i] = new vertex[m];
 	}
-	glEnd();
-	glEndList();
-	return list;
+	count();
+	tex = 0;
 }
 
-GLuint gen::bezier(bpatch patch)
+torus::~torus ()
 {
-	int u = 0, v;
-	float py, px, pyold;
-	GLuint drawlist = glGenLists(1);
-	vertex temp[4];
-	vertex* last;
-
-	last = new vertex[divs+1];
-
-	if (patch.dlBPatch != 0)
-		glDeleteLists(patch.dlBPatch, 1);
-
-	for (int k = 0; k < 4; k++)
+ 	for (int i = 0; i < n + 1; i++)
 	{
-		temp[k] = patch.anchors[k][3];
+		delete[] storage[i];
 	}
+	delete[] storage;
+	delete[] textures;
+}
 
-	for (v = 0; v < divs + 1; v++)
+void torus::count()
+{
+	int i2;
+	vertex dot;
+	vertex normal;
+	float S, ri;
+	float phi = 0, alpha = 0;
+	float beta = a/R;
+ 	for (int i = 0; i <= n; i++)
 	{
-		px = ((float)v)/((float)divs);
-		last[v] = Bernstein(px, temp);
-	}
+		i2 = i - (n/2);
+		phi = (2*Pi/n)*(a/(R*(Pi+(1-Pi)*a/R)))*i2;
+		dot.set3d((R-a)-R*cos(phi), 0, -R*sin(phi));
 
-	glNewList(drawlist, GL_COMPILE);
-	glActiveTexture(GL_TEXTURE0_ARB);
-	glBindTexture(GL_TEXTURE_2D, texture[patch.textures[0]]);
-	glEnable(GL_TEXTURE_2D);
+		S = a*sqrt(1.0 - (4.0 * (float)abs(i2)/n * (float) abs(i2)/n));
+		ri = S + (r + (a-r)*(1-beta) - S)*beta;
 
-	for (u = 1; u < divs + 1; u++)
-	{
-		py = ((float)u)/((float)divs);
-		pyold = ((float)u - 1.0f)/((float)divs);
+		if ((i == n || i == 0) && beta < 0.05)
+			ri = 0;
 
-		for (int k = 0; k < 4; k++)
+		for (int k = 0; k < m; k++)
 		{
-			temp[k] = Bernstein(py, patch.anchors[k]);
+	alpha = 2*Pi*k/m;
+
+	storage[i][k].set3d(cos(alpha)*cos(phi),sin(alpha),cos(alpha)*sin(phi));
+	normal = storage[i][k];
+	storage[i][k].setNormal(normal);
+
+	storage[i][k] = storage[i][k] * ri;
+	storage[i][k] = storage[i][k] - dot;
+
+	storage[i][k].setTex(10*ri/r*i/(float)n, ri/r * k/(float)m);
 		}
 
-		glBegin(GL_TRIANGLE_STRIP);
-			for (v = 0; v < divs + 1; v++)
-			{
-				px = ((float)v)/((float)divs);
-				
-			 	glTexCoord2f(pyold, px);
-				glVertex3d(last[v].x, last[v].y, last[v].z);
+ 	} 
 
-				last[v] = Bernstein(px, temp);
-			 	glTexCoord2f(py, px);
-				glVertex3d(last[v].x, last[v].y, last[v].z);
-			}
+}
 
+void torus::display()
+{
+	TexturesOn();
+  for (int i = 0; i <= (int) (n - 1 + a/R); i++)
+	{
+		glBegin(GL_QUAD_STRIP);
+		for (int k = 0; k < m; k++)
+		{
+				storage[i][k].glCoords(tex);
+				storage[(i+1)%(n+1)][k].glCoords(tex);
+		}	
+
+			storage[i][0].glCoords(tex);
+			storage[(i+1)%(n+1)][0].glCoords(tex);
 		glEnd();
 	}
+	TexturesOff();
+}
+
+void torus::sphere(bool s)
+{
+	if (s)
+	{
+		R = 23*a;
+		count();
+	}
+	else if (R < 23*a)
+	{
+		R += 1;
+		count();
+	}
+}
+
+void torus::unsphere(bool s)
+{
+	if (s)
+	{
+		R = a;
+		count();
+	}
+	else if (R >= a+1)
+	{
+		R -= 1;
+		count();
+	}
+}
 	
-	glEndList();
-
-	glActiveTexture(GL_TEXTURE0_ARB);
-	glDisable(GL_TEXTURE_2D);
-
-	delete [] last;
-	return drawlist;
-}
-
-void bpatch::display()
+void torus::addTexture(int t)
 {
-	if (dlBPatch != 0)
-		glCallList(dlBPatch);
-}
-
-bpatch::bpatch(const char* path)
-{
-	interior bez(path);
-	if (bez.total != 4)
-		exit(bez.total+4);
-	for (int i = 0; i < 4; i++)
-		for (int j = 0; j < 4; j++)
+	if (tex == 0)
+	{
+		tex = 1;
+		textures = new int[1];
+		textures[0] = t;
+	}
+	else
+	{
+		int* aux = new int[tex];
+		for (int i = 0; i < tex; i++)
 		{
-			anchors[i][j] = bez.frames[i]->vertices[j];
+			aux[i] = textures[i];
+		}
+		tex++;
+		if (textures != NULL)
+		{
+			delete[] textures;
+		}
+		textures = new int[tex];
+		for (int i = 0; i < tex - 1; i++)
+		{
+			textures[i] = aux[i];
+		}
+		textures[tex-1] = t;
+	}
+}
+	
+void torus::deleteLastTexture()
+{
+	tex--;
+}
+
+void torus::TexturesOn()
+{
+	if (tex >= 1)
+	{
+		glActiveTexture(GL_TEXTURE0_ARB);
+		glBindTexture(GL_TEXTURE_2D, gettex(0)); 
+		glEnable(GL_TEXTURE_2D);
+		if (tex > 1)
+		{
+			glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
+			glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_REPLACE);
 		}
 
-  tex = bez.tex;
-	textures = new int[tex];
-	for (int k = 0; k < tex; k++)
-			textures[k] = bez.textures[k];
-
+		for (int i = 1; i < tex; i++)
+		{
+			glActiveTexture(GLTexture[i]);
+			glEnable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, gettex(i)); 
+			glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
+			glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_ADD);
+				
+			glEnable(GL_TEXTURE_GEN_S);
+			glEnable(GL_TEXTURE_GEN_T);
+			glTexGeni(GL_S,GL_TEXTURE_GEN_MODE,GL_SPHERE_MAP);
+			glTexGeni(GL_T,GL_TEXTURE_GEN_MODE,GL_SPHERE_MAP);
+		}
+	}
 }
 
-GLuint bpatch::dlBPatch = 0;
+void torus::TexturesOff()
+{
+	if (tex >= 1)
+	{
+ 		glActiveTexture(GL_TEXTURE0_ARB);
+		glDisable(GL_TEXTURE_2D);
+		for (int i = 1; i < tex; i++)
+		{
+			glActiveTexture(GLTexture[i]);
+			glDisable(GL_TEXTURE_GEN_S);
+			glDisable(GL_TEXTURE_GEN_T);
+			glDisable(GL_TEXTURE_2D);
+		}
+	}
+}
+
+GLuint torus::gettex(int n)
+{
+	return texture[textures[n]];
+}
+//GLuint gen::bezier(bpatch patch)
+//{
+	//int u = 0, v;
+	//float py, px, pyold;
+	//GLuint drawlist = glGenLists(1);
+	//vertex temp[4];
+	//vertex* last;
+
+	//last = new vertex[divs+1];
+
+	//if (patch.dlBPatch != 0)
+		//glDeleteLists(patch.dlBPatch, 1);
+
+	//for (int k = 0; k < 4; k++)
+	//{
+		//temp[k] = patch.anchors[k][3];
+	//}
+
+	//for (v = 0; v < divs + 1; v++)
+	//{
+		//px = ((float)v)/((float)divs);
+		//last[v] = Bernstein(px, temp);
+	//}
+
+	//glNewList(drawlist, GL_COMPILE);
+	//glActiveTexture(GL_TEXTURE0_ARB);
+	//glBindTexture(GL_TEXTURE_2D, texture[patch.textures[0]]);
+	//glEnable(GL_TEXTURE_2D);
+
+	//for (u = 1; u < divs + 1; u++)
+	//{
+		//py = ((float)u)/((float)divs);
+		//pyold = ((float)u - 1.0f)/((float)divs);
+
+		//for (int k = 0; k < 4; k++)
+		//{
+			//temp[k] = Bernstein(py, patch.anchors[k]);
+		//}
+
+		//glBegin(GL_TRIANGLE_STRIP);
+			//for (v = 0; v < divs + 1; v++)
+			//{
+				//px = ((float)v)/((float)divs);
+				
+				 //glTexCoord2f(pyold, px);
+				//glVertex3d(last[v].x, last[v].y, last[v].z);
+
+				//last[v] = Bernstein(px, temp);
+				 //glTexCoord2f(py, px);
+				//glVertex3d(last[v].x, last[v].y, last[v].z);
+			//}
+
+		//glEnd();
+	//}
+	
+	//glEndList();
+
+	//glActiveTexture(GL_TEXTURE0_ARB);
+	//glDisable(GL_TEXTURE_2D);
+
+	//delete [] last;
+	//return drawlist;
+//}
+
+//void bpatch::display()
+//{
+	//if (dlBPatch != 0)
+		//glCallList(dlBPatch);
+//}
+
+//bpatch::bpatch(const char* path)
+//{
+	//interior bez(path);
+	//if (bez.total != 4)
+		//exit(bez.total+4);
+	//for (int i = 0; i < 4; i++)
+		//for (int j = 0; j < 4; j++)
+		//{
+			//anchors[i][j] = bez.frames[i]->vertices[j];
+		//}
+
+  //tex = bez.tex;
+	//textures = new int[tex];
+	//for (int k = 0; k < tex; k++)
+			//textures[k] = bez.textures[k];
+
+//}
+
+//GLuint bpatch::dlBPatch = 0;
+
+//vertex object::iforce(vertex dot) // сила, которую производит объект в заданной точке на единичную массу
+//{
+	//float r = distance(dot, center);
+	//vertex direction = center - dot;
+	//vertex inception;
+	//float d = distance(direction, inception);
+	//direction = direction / d;
+	//return direction * (mass*G/(r*r));
+//}
+
+//float object::ipot(vertex dot)
+//{
+	//float r = distance(dot, center);
+	//return (-mass*G/r);
+//}
+
+//void object::move()
+//{
+	//glPushMatrix();
+
+	//velocity = velocity + acceleration*timer;	
+	//center = center + velocity;
+	//angle += w;
+
+	//glTranslatef(center.x, center.y, center.z);	
+	//glRotatef(angle, axis.x, axis.y, axis.z);
+//}
+
+//void object::display()
+//{
+	//move();
+	//core.display();
+	//glPopMatrix();
+//}

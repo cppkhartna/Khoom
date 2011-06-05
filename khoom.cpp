@@ -12,6 +12,18 @@
 #define BEZ_NUM 6
 
 const double Pi = 3.1415;
+const int FurCount = 16;
+bool furred = false;
+bool fire = false;
+
+torus Thor(6, 2, 72, 34);
+torus FurThors[FurCount];
+
+int scene = 0;
+
+GLenum GLTexture[GL_MAX_TEXTURE_UNITS_ARB]; //dirty hack (because I can't see any other way to use GL_TEXTUREn_ARB);
+
+float timer; //дельта времени
 
 GLfloat rtri;
 GLfloat rtrq;
@@ -46,23 +58,26 @@ GLfloat therotate;
 
 GLfloat z=0.0f;                       // depth into the screen.
 
-GLfloat LightAmbient[]  = {0.5f, 0.5f, 0.5f, 1.0f}; 
+GLfloat LightAmbient[]  = {0.0f, 0.0f, 0.0f, 0.0f}; 
 GLfloat LightDiffuse[]  = {1.0f, 1.0f, 1.0f, 1.0f}; 
-GLfloat LightPosition[] = {0.0f, 0.0f, 2.0f, 1.0f};
+GLfloat LightPosition[] = {0.0f, 1.0f, 0.0f, 1.0f};
 
 //interior prism("prism.txt");
 interior world("world.txt");
 interior simple("simple.txt");
-interior land("map3_landscape.txt");
-bpatch bezier("bezier.txt");
-interior Fichte("Fichte.txt");
-interior Tree("tree.txt");
+//interior land("map3_landscape.txt");
+//bpatch bezier("bezier.txt");
+//interior Fichte("Fichte.txt");
+//interior Tree("tree.txt");
+//interior cube("cube.txt");
+interior ob("object.txt");
+interior bg("bg.txt");
 
-const int GroundSize = 5;
-const double TreeSize = 1.0;
-const int treeCount = 30;
+//const int GroundSize = 5;
+//const double TreeSize = 1.0;
+//const int treeCount = 30;
 
-double fichten[treeCount];
+//double fichten[treeCount];
 
 int bk_width;
 int bk_width2;
@@ -77,10 +92,10 @@ unsigned char* map;
 int mapx;
 int mapy;
 
-GLuint cube;
-GLuint torus;
-GLuint fichte;
-GLuint tree;
+//GLuint cube;
+//GLuint torus;
+//GLuint fichte;
+//GLuint tree;
 
 
 void landscape(const char* path, float x0, float y0)
@@ -164,19 +179,7 @@ void init(int Width, int Height)
 	int total = 0;
 	int pos;
 
-  glClearColor(0.0f, 0.0f, 0.0f, 0.0f);	
-  glClearDepth(1.0);				
-  glDepthFunc(GL_LESS);			
-  glEnable(GL_DEPTH_TEST);
-  glShadeModel(GL_SMOOTH);
-
-  glMatrixMode(GL_PROJECTION);
-  glLoadIdentity();			
-
-  gluPerspective(45.0f,(GLfloat)Width/(GLfloat)Height,0.1f,100.0f);
-
-  glMatrixMode(GL_MODELVIEW);
-		
+//Load textures		
 	file.open("textures.txt");
 	if (file.fail())
 	{
@@ -233,36 +236,89 @@ void init(int Width, int Height)
 		}
 
 	}
+
+	if (bk_bits != NULL)
+		delete[] bk_bits;
+	if (bk_bits1 != NULL)
+		delete[] bk_bits1;
+	if (bk_bits2 != NULL)
+		delete[] bk_bits2;
+  
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);	
+  glClearDepth(1.0);				
+  glDepthFunc(GL_LESS);			
+  glEnable(GL_DEPTH_TEST);
+  glShadeModel(GL_SMOOTH);
+
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();			
+
+  gluPerspective(45.0f,(GLfloat)Width/(GLfloat)Height,0.1f,100.0f);
+
+  glMatrixMode(GL_MODELVIEW);
 		
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_LIGHTING);
     
-	glLightfv(GL_LIGHT1, GL_AMBIENT, LightAmbient);  // add lighting. (ambient)
-  glLightfv(GL_LIGHT1, GL_DIFFUSE, LightDiffuse);  // add lighting. (diffuse).
-  glLightfv(GL_LIGHT1, GL_POSITION,LightPosition); // set light position.
-  glEnable(GL_LIGHT1);                             // turn light 1 on.
 	
-	for (int i = 0; i < treeCount; i++)
-		fichten[i] = -GroundSize + TreeSize + 2*rand()*(GroundSize - TreeSize)/RAND_MAX;
+	//for (int i = 0; i < treeCount; i++)
+		//fichten[i] = -GroundSize + TreeSize + 2*rand()*(GroundSize - TreeSize)/RAND_MAX;
 
 // основные display lists
 	
-	cube = gen::cube();
-	torus = gen::torus(2.0,0.5,25,20); 
+	//cube = gen::cube();
+	//torus = gen::torus(2.0,0.5,25,20); 
 	//fichte = gen::other(Fichte);
-	tree = gen::other(Tree);
+	//tree = gen::other(Tree);
+	
+	//world.divide(1000);
+
+	Thor.addTexture(6);
+	Thor.addTexture(8);
+
+	for (int i = 0; i < FurCount; i++)
+	{
+		FurThors[i].settorus(6, 2*(1 + (float) i/FurCount * 0.5), 32, 74);
+		FurThors[i].addTexture(10);
+	}
+
 }
 
-interior room("room.txt");
+GLfloat dir[] = {0,-1,0,1};
+
+vertex GetPos(int x, int y)
+{
+	GLint viewport[4];
+	GLdouble modelview[16];
+	GLdouble projection[16];
+	GLfloat winX, winY, winZ;
+	GLdouble posX, posY, posZ;
+
+	glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
+	glGetDoublev(GL_PROJECTION_MATRIX, projection);
+	glGetIntegerv(GL_VIEWPORT, viewport);
+
+	winX = (float) x;
+	winY = (float)viewport[3] - (float) y;
+	glReadPixels(x, (int) winY, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &winZ);
+
+	gluUnProject(winX, winY, winZ, modelview, projection, viewport, 
+						  &posX, &posY, &posZ);
+
+	return vertex(posX, posY, posZ, 0, 0, 0, 0, 0);
+}
+
 
 void display()
 {
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   GLfloat xtrans, ztrans, ytrans;
   GLfloat sceneroty;
 
   xtrans = -xpos;
   ztrans = -zpos;
-  ytrans = -walkbias-0.25f;
+  ytrans = -walkbias-1.0f;
   sceneroty = 360.0f - yrot;
     	
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);		
@@ -273,113 +329,132 @@ void display()
 	
   glTranslatef(xtrans, ytrans, ztrans);    
 
+	glLightfv(GL_LIGHT1, GL_AMBIENT, LightAmbient);  // add lighting. (ambient)
+  glLightfv(GL_LIGHT1, GL_DIFFUSE, LightDiffuse);  // add lighting. (diffuse).
+  glLightfv(GL_LIGHT1, GL_POSITION,LightPosition); // set light position.
+  glEnable(GL_LIGHT1);                             // turn light 1 on.
+
 	//волны с помощью B-spline (кривых Безье)
 	
-	glTranslatef(0, 0, -20);
-	int k = 1;
+	//glTranslatef(0, 0, -20);
+	//int k = 1;
 
-	bezier.dlBPatch = gen::bezier(bezier);
-	for (int j = 0; j < BEZ_NUM; j++)
-	{
-		glTranslatef(-1.50*BEZ_NUM+0.75*k, 0, 1.50);
-		for (int i = 0; i < BEZ_NUM; i++)
-		{
-			glTranslatef(1.50, 0, 0);
-			bezier.display();
-		}	
-		k = -k;
-	}
+	//bezier.dlBPatch = gen::bezier(bezier);
+	//for (int j = 0; j < BEZ_NUM; j++)
+	//{
+		//glTranslatef(-1.50*BEZ_NUM+0.75*k, 0, 1.50);
+		//for (int i = 0; i < BEZ_NUM; i++)
+		//{
+			//glTranslatef(1.50, 0, 0);
+			//bezier.display();
+		//}	
+		//k = -k;
+	//}
 	
-	glTranslatef(0, 0, 10);
-	glRotatef(180*piover180, 0, 1, 0);
+	//glTranslatef(0, 0, 10);
+	//glRotatef(180*piover180, 0, 1, 0);
 
 	//комната
-	world.display();
+	//glTranslatef(1.5, 0.5, -1.5);
+	//glTranslatef(-1.5, -0.5, 1.5);
 	// горы, сгенерированные из bmp
-	land.display(lines);
+	//land.display(lines);
 
 	//хвойный лес из billboards
 	
 	//glTranslatef(10, 0, 10);
-	glRotatef(180*piover180, 0, 1, 0);
+	//glRotatef(180*piover180, 0, 1, 0);
 		
-	glEnable(GL_ALPHA_TEST);
-	glAlphaFunc(GL_GREATER, 0.05);
+	//glEnable(GL_ALPHA_TEST);
+	//glAlphaFunc(GL_GREATER, 0.05);
 	
-	for (int i = 0; i < treeCount; i++) 
+	//for (int i = 0; i < treeCount; i++) 
+	//{
+		//int index = (yrot > 180) ? (i) : (treeCount - 1 - i);
+		//double x = -GroundSize + TreeSize + 2*(GroundSize - TreeSize)*index/(treeCount - 1);
+		//double z = fichten[index];
+
+		//glPushMatrix();
+
+	//	//glLoadIdentity();
+		//glTranslated(0,0,-3*GroundSize);
+		//glRotated(xrot,1,0,0);
+		//glRotated(yrot,0,1,0);
+		//glTranslated(x,0,z);
+		//glRotated(-yrot,0,1,0);
+		//glRotated(-xrot,1,0,0);
+
+		//Fichte.display();
+
+		//glPopMatrix();
+	//}
+	
+	//glDisable(GL_ALPHA_TEST);
+	
+	//glTranslatef(-10, 0, -10);
+
+  //usleep(1000);
+	//полупрозрачный объект с упорядоченным выводом граней
+	//vertex* viewer = new vertex(GetPos(0, 0));
+	//ob.display(viewer);
+	//delete viewer;
+
+
+	switch (scene)
 	{
-		int index = (yrot > 180) ? (i) : (treeCount - 1 - i);
-		double x = -GroundSize + TreeSize + 2*(GroundSize - TreeSize)*index/(treeCount - 1);
-		double z = fichten[index];
+		case 0:
+		{
+			glPushMatrix();
+			glScalef(50, 50, 50);	
+			//рисуем фон
+			bg.display();
+			glScalef(0.02, 0.02, 0.02);	
+    
+			rtri += 0.3;
+			rtrq +=0.35;
+			rtrp +=0.35;
+	
+			//задаём вращение
+			glTranslatef(0.0f,0.0f, -27.0f);		
+			glRotatef(rtri, 1.0f, 0.0f, 0.0f);
+			glRotatef(rtrq, 0.0f, 1.0f, 0.0f);
+			glRotatef(rtrp, 0.0f, 0.0f, 1.0f);
 
-		glPushMatrix();
 
-		//glLoadIdentity();
-		glTranslated(0,0,-3*GroundSize);
-		glRotated(xrot,1,0,0);
-		glRotated(yrot,0,1,0);
-		glTranslated(x,0,z);
-		glRotated(-yrot,0,1,0);
-		glRotated(-xrot,1,0,0);
+			// рисуем сферотор
+  		Thor.display();	
 
-		Fichte.display();
+			if (furred)
+			{
 
-		glPopMatrix();
+				float shadowMin = 0.2;
+				float shadowMax = 0.5;
+
+				for (int i = 0; i < FurCount; i++)
+				{
+					float t = (float) i / FurCount;
+					float shadow = shadowMin*(1-t) + shadowMax;
+					glColor4f(1, 1, 1, shadow);
+
+					if (fire)
+						glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+					else
+						glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+					FurThors[i].display();
+
+				}
+
+			}
+
+			//Восстанавливаем матрицы
+			glPopMatrix(); 
+		}
+
 	}
 	
-	glDisable(GL_ALPHA_TEST);
-	
-	glTranslatef(-10, 0, -10);
-
-  usleep(1000);
-    
-	rtri += 0.2;
-	rtrq -=0.15;
-	rtrp +=0.35;
-	
-	
-	glTranslatef(0.0f,0.0f,-6.0f);		
-	glRotatef(rtrp, 0.0f, 1.0f, 0.0f);
-
-	//simple.display();
-	
-	//antialiasing
-	//glEnable(GL_MULTISAMPLE_ARB);
-	//glDisable(GL_BLEND);
-	
-		//glActiveTexture(GL_TEXTURE0_ARB);
-		//glEnable(GL_TEXTURE_2D);
-		//glBindTexture(GL_TEXTURE_2D, texture[0]); 
-		//glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
-		//glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_REPLACE);
-
-		//glActiveTexture(GL_TEXTURE1_ARB);
-		//glEnable(GL_TEXTURE_2D);
-		//glBindTexture(GL_TEXTURE_2D, texture[1]); 
-		//glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
-		//glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_ADD);
-
-	//glEnable(GL_TEXTURE_GEN_S); // Задаем автоматическую генерацию текстурных координат для 0 текстуры
-	//glEnable(GL_TEXTURE_GEN_T);
-	//glTexGeni(GL_S,GL_TEXTURE_GEN_MODE,GL_SPHERE_MAP);
-	//glTexGeni(GL_T,GL_TEXTURE_GEN_MODE,GL_SPHERE_MAP);
-
-	//glCallList(torus);
-
-	//glDisable(GL_TEXTURE_GEN_S); // Отключаем автоматическую генерацию текстурных координат для 0 текстуры
-	//glDisable(GL_TEXTURE_GEN_T);
-
-		//glActiveTexture(GL_TEXTURE1_ARB);
-	//glDisable(GL_TEXTURE_2D);
-		//glActiveTexture(GL_TEXTURE0_ARB);
-	//glDisable(GL_TEXTURE_2D);
-	
-	//glEnable(GL_MULTISAMPLE_ARB);
-	
-	//glDisable(GL_TEXTURE_2D);
-
-		glFlush();
-    glutSwapBuffers();
+	glFlush();
+  glutSwapBuffers();
 }
 void reshape(int width, int height)
 {
@@ -398,30 +473,77 @@ void reshape(int width, int height)
 void keyPressed(unsigned char key, int x, int y) 
 {
     usleep(100);
+		int i;
 
-    switch (key)
-	 	{    
-    case ESCAPE: 
-			exit(1);                   	
-		break; 
-		//hills:
-    case 'h': 
-		case 'H':
-			lines = !lines;                   	
-		break; 
-    case 'L': 
-    case 'l': // switch the lighting.
-	printf("L/l pressed; light is: %d\n", light);
-	light = light ? 0 : 1;              // switch the current value of light, between 0 and 1.
-	printf("Light is now: %d\n", light);
-	if (!light) {
-	    glDisable(GL_LIGHTING);
-	} else {
-	    glEnable(GL_LIGHTING);
-	}
-	break;
+		switch (scene)
+		{
+		case 0:
+   		switch (key) 
+			{    
+   		case ESCAPE: 
+				exit(1);                   	
+			break; 
+			case '=': case '+':
+				Thor.sphere();   
+				if (furred)
+				{
+					for (i = 0; i < FurCount; i++)
+						FurThors[i].sphere();
+				}				
+			break; 
+      case '-': 
+				Thor.unsphere();                   	
+				if (furred)
+				{
+					for (i = 0; i < FurCount; i++)
+						FurThors[i].unsphere();
+				}				
+			break; 
+			case'S':case 's':
+				Thor.sphere(true);                   	
+				if (furred)
+				{
+					for (i = 0; i < FurCount; i++)
+						FurThors[i].sphere(true);
+				}				
+			break; 
+			case 'U':case 'u': 
+				Thor.unsphere(true);                   	
+				if (furred)
+				{
+					for (i = 0; i < FurCount; i++)
+						FurThors[i].unsphere(true);
+				}				
+			break; 
+			case 'F': case 'f':
+			if (!furred)
+			{
+				Thor.deleteLastTexture();
+				Thor.textures[0] = 9;
+			 	furred = true;	
+			}
+			else
+			{
+				Thor.addTexture(8);
+				Thor.textures[0] = 6;
+			 	furred = false;	
+			}
+			break;
+			case 'O': case 'o':
+				if (furred)
+				{
+					fire = !fire;
+				}
+			break;
+			}
+		break;
 		}
 
+				//hills:
+        //case 'H': 
+			 //case 'h':
+				//lines = !lines;                   	
+				//break; 
 }
 
 void specialKeyPressed(int key, int x, int y) 
@@ -485,21 +607,28 @@ void idle()
 int main(int argc, char *argv[])
 {
 		using namespace std;
-		
-		ifstream file;      
-		file.open("map3_landscape.txt");
-		if (file.fail())
+
+		GLTexture[0] = GL_TEXTURE0_ARB;
+
+		for (int i = 1; i < 32; i++)
 		{
-			landscape("map3.bmp", 55, 55);
+			GLTexture[i] = GLTexture[i-1] + 1;
 		}
-		else
-			file.close();
+		
+		//ifstream file;      
+		//file.open("map3_landscape.txt");
+		//if (file.fail())
+		//{
+			//landscape("map3.bmp", 55, 55);
+		//}
+		//else
+			//file.close();
 
 		glutInit(&argc, argv);  
     glutInitWindowSize(640, 480);  
     glutInitWindowPosition(0, 0);  
     glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH | GLUT_ALPHA);  
-    glutCreateWindow("Khoom - Khana Own Doom");  
+    glutCreateWindow("Khoom");  
 		glutDisplayFunc(display);  
     glutFullScreen();
 		glutIdleFunc(&idle); 
