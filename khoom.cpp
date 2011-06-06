@@ -11,12 +11,21 @@
 
 #define BEZ_NUM 6
 
+int total = 0;
+GLuint cubic;
+bool cub = false;
+bool b = true;
+int save;
+
 const double Pi = 3.1415;
 const int FurCount = 16;
 bool furred = false;
 bool fire = false;
 
-torus Thor(6, 2, 72, 34);
+const int R = 6;
+const int r = 2;
+
+torus Thor(R, r, 72, 34);
 torus FurThors[FurCount];
 
 int scene = 0;
@@ -72,12 +81,15 @@ interior simple("simple.txt");
 //interior cube("cube.txt");
 interior ob("object.txt");
 interior bg("bg.txt");
+interior top("bg-top.txt");
+interior bottom("bg-bottom.txt");
+interior box("box.txt");
 
-//const int GroundSize = 5;
-//const double TreeSize = 1.0;
-//const int treeCount = 30;
+const int GroundSize = 5;
+const double TreeSize = 1.0;
+const int treeCount = 30;
 
-//double fichten[treeCount];
+double fichten[treeCount];
 
 int bk_width;
 int bk_width2;
@@ -108,7 +120,6 @@ void landscape(const char* path, float x0, float y0)
 			}
 	ofstream file;      
 	string oneline;
-	int total = 0;
 	int save_j = 0;
 	int pos;
 
@@ -169,6 +180,52 @@ void landscape(const char* path, float x0, float y0)
 	file << "QUADS " << total << endl;
 	file.close();
 	
+}
+
+void LoadCubicMaps()
+{
+	using namespace std;
+	ifstream file;      
+	string oneline;
+
+//Load textures		
+	file.open("cubictextures.txt");
+	if (file.fail())
+	{
+		cout << "Error opening file: cubictextures.txt" << endl;
+		exit(13);
+	}
+
+	total++;
+	cubic = total;
+	glGenTextures(1, &texture[total]);
+	glBindTexture(GL_TEXTURE_CUBE_MAP_ARB, texture[total]);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+	glTexParameterf(GL_TEXTURE_CUBE_MAP_ARB, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_CUBE_MAP_ARB, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	for (int i = 0; i < 6; i++)
+	{
+		getline(file, oneline, '\n');
+			
+		if((bk_bits=LoadBMPFile(oneline.c_str(), &bk_width, &bk_height))== NULL)
+		{
+			cout << "Error loading texture: " << oneline << endl;	
+			exit(40*i+2);
+		}
+	
+		gluBuild2DMipmaps(GL_TEXTURE_CUBE_MAP_POSITIVE_X_ARB+i, GL_RGB8, bk_width, bk_height, GL_RGB, GL_UNSIGNED_BYTE, bk_bits);
+
+		if (bk_bits != NULL)	
+			delete[] bk_bits;
+	}
+	
+	glEnable(GL_TEXTURE_CUBE_MAP_ARB);
+	
+	glTexParameteri(GL_TEXTURE_CUBE_MAP_ARB, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP_ARB, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glDisable(GL_TEXTURE_CUBE_MAP_ARB);
 }
 
 void init(int Width, int Height)
@@ -259,11 +316,14 @@ void init(int Width, int Height)
 		
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_NORMALIZE);
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_FRONT);
 	glEnable(GL_LIGHTING);
     
 	
-	//for (int i = 0; i < treeCount; i++)
-		//fichten[i] = -GroundSize + TreeSize + 2*rand()*(GroundSize - TreeSize)/RAND_MAX;
+	for (int i = 0; i < treeCount; i++)
+		fichten[i] = -GroundSize + TreeSize + 2*rand()*(GroundSize - TreeSize)/RAND_MAX;
 
 // основные display lists
 	
@@ -272,18 +332,21 @@ void init(int Width, int Height)
 	//fichte = gen::other(Fichte);
 	//tree = gen::other(Tree);
 	
-	//world.divide(1000);
+	world.divide(1000);
 
 	Thor.addTexture(6);
 	Thor.addTexture(8);
 
 	for (int i = 0; i < FurCount; i++)
 	{
-		FurThors[i].settorus(6, 2*(1 + (float) i/FurCount * 0.5), 32, 74);
+		FurThors[i].settorus(R, r*(1 + (float) i/FurCount * 0.5), 32, 74);
 		FurThors[i].addTexture(10);
 	}
 
+	LoadCubicMaps();
+
 }
+
 
 GLfloat dir[] = {0,-1,0,1};
 
@@ -334,6 +397,102 @@ void display()
   glLightfv(GL_LIGHT1, GL_POSITION,LightPosition); // set light position.
   glEnable(GL_LIGHT1);                             // turn light 1 on.
 
+
+
+	switch (scene)
+	{
+		case 0:
+		{
+			glPushMatrix();
+			glScalef(50, 50, 50);	
+			//рисуем фон
+			bg.display();
+			top.display();
+			bottom.display();
+			glScalef(0.02, 0.02, 0.02);	
+			
+			rtri += 0.3;
+			rtrq +=0.35;
+			rtrp +=0.35;
+	
+			//задаём вращение
+			glTranslatef(0.0f,0.0f, -27.0f);		
+			glRotatef(rtri, 1.0f, 0.0f, 0.0f);
+			glRotatef(rtrq, 0.0f, 1.0f, 0.0f);
+			glRotatef(rtrp, 0.0f, 0.0f, 1.0f);
+
+
+			// рисуем сферотор
+			
+			if (!cub)
+			{
+				Thor.display();	
+
+				if (furred)
+				{
+
+					float shadowMin = 0.2;
+					float shadowMax = 0.5;
+
+					for (int i = 0; i < FurCount; i++)
+					{
+						float t = (float) i / FurCount;
+						float shadow = shadowMin*(1-t) + shadowMax;
+						glColor4f(1, 1, 1, shadow);
+	
+						if (fire)
+							glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+						else
+							glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	
+						FurThors[i].display();
+	
+					}
+	
+				}
+			}
+			else
+			{
+			//кубические текстуры в режиме окружающей среды
+				glActiveTextureARB(GL_TEXTURE5_ARB);
+				glTexGeni(GL_S, GL_TEXTURE_GEN_MODE, GL_REFLECTION_MAP_ARB);
+				glTexGeni(GL_T, GL_TEXTURE_GEN_MODE, GL_REFLECTION_MAP_ARB);
+				glTexGeni(GL_R, GL_TEXTURE_GEN_MODE, GL_REFLECTION_MAP_ARB);
+				glEnable(GL_TEXTURE_CUBE_MAP_ARB);
+				glBindTexture(GL_TEXTURE_CUBE_MAP_ARB, texture[cubic]);
+				glTexParameteri(GL_TEXTURE_CUBE_MAP_ARB, GL_TEXTURE_WRAP_S, GL_CLAMP);
+				glTexParameteri(GL_TEXTURE_CUBE_MAP_ARB, GL_TEXTURE_WRAP_T, GL_CLAMP);
+				glEnable(GL_TEXTURE_GEN_S);
+				glEnable(GL_TEXTURE_GEN_T);
+				glEnable(GL_TEXTURE_GEN_R);
+
+				//сделаем текстуру тора полупрозрачной
+				save = Thor.textures[0];
+				Thor.textures[0] = 0;
+				if (b)
+				{
+						Thor.sphere(true);
+						b = !b;
+				}
+				Thor.display();
+				Thor.textures[0] = save;
+
+				glActiveTextureARB(GL_TEXTURE5_ARB);
+				glDisable(GL_TEXTURE_GEN_S);
+				glDisable(GL_TEXTURE_GEN_T);
+				glDisable(GL_TEXTURE_GEN_R);
+				glDisable(GL_TEXTURE_CUBE_MAP_ARB);
+			}
+
+			//Восстанавливаем матрицы
+			glPopMatrix(); 
+		}
+		break;
+		case 1:
+		{
+	//комната
+	world.display();
+
 	//волны с помощью B-spline (кривых Безье)
 	
 	//glTranslatef(0, 0, -20);
@@ -354,7 +513,6 @@ void display()
 	//glTranslatef(0, 0, 10);
 	//glRotatef(180*piover180, 0, 1, 0);
 
-	//комната
 	//glTranslatef(1.5, 0.5, -1.5);
 	//glTranslatef(-1.5, -0.5, 1.5);
 	// горы, сгенерированные из bmp
@@ -398,59 +556,12 @@ void display()
 	//vertex* viewer = new vertex(GetPos(0, 0));
 	//ob.display(viewer);
 	//delete viewer;
-
-
-	switch (scene)
-	{
-		case 0:
-		{
-			glPushMatrix();
-			glScalef(50, 50, 50);	
-			//рисуем фон
-			bg.display();
-			glScalef(0.02, 0.02, 0.02);	
-    
-			rtri += 0.3;
-			rtrq +=0.35;
-			rtrp +=0.35;
 	
-			//задаём вращение
-			glTranslatef(0.0f,0.0f, -27.0f);		
-			glRotatef(rtri, 1.0f, 0.0f, 0.0f);
-			glRotatef(rtrq, 0.0f, 1.0f, 0.0f);
-			glRotatef(rtrp, 0.0f, 0.0f, 1.0f);
-
-
-			// рисуем сферотор
-  		Thor.display();	
-
-			if (furred)
-			{
-
-				float shadowMin = 0.2;
-				float shadowMax = 0.5;
-
-				for (int i = 0; i < FurCount; i++)
-				{
-					float t = (float) i / FurCount;
-					float shadow = shadowMin*(1-t) + shadowMax;
-					glColor4f(1, 1, 1, shadow);
-
-					if (fire)
-						glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-					else
-						glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-					FurThors[i].display();
-
-				}
-
-			}
-
-			//Восстанавливаем матрицы
-			glPopMatrix(); 
 		}
-
+		break;
+		default:
+			scene = 0;
+		break;
 	}
 	
 	glFlush();
@@ -535,6 +646,12 @@ void keyPressed(unsigned char key, int x, int y)
 					fire = !fire;
 				}
 			break;
+			case 'C': case 'c':
+				cub = !cub;
+			break;
+			case 'B': case 'b':
+				b = !b;
+			break;
 			}
 		break;
 		}
@@ -591,7 +708,7 @@ void specialKeyPressed(int key, int x, int y)
 		break;
 
     default:
-			printf ("Special key %d pressed. No action there yet.\n", key);
+			//printf ("Special key %d pressed. No action there yet.\n", key);
 		break;
     }	
 }

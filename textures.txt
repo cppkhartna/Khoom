@@ -1,12 +1,14 @@
-TEXTURES 11
+TEXTURES 13
 Textures/colormap.bmp
-Textures/sunset.bmp
-Textures/mud.bmp
+Textures/colormap.bmp
+Textures/colormap.bmp
 Textures/Water.bmp
 Textures/tree.bmp
 Textures/Fichte.bmp
 Textures/sweater.bmp
-Textures/Fur.bmp
+Textures/down.bmp
 Textures/space.bmp
 Textures/carpet.bmp
 Textures/fur.bmp
+Textures/sky2.bmp
+Textures/colormap.bmp

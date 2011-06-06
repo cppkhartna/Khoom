@@ -60,12 +60,9 @@ void vertex::setColors(float set_r, float set_g, float set_b)
 
 void vertex::glCoords(int tex)
 {
-	if (tex == 1)
-		glTexCoord2f(u, v);
-	else if (tex > 1)
+	if (tex >= 1)
 	{
-		glMultiTexCoord2fARB(GL_TEXTURE0_ARB, u, v);
-		for (int i = 1; i < tex; i++)
+		for (int i = 0; i < tex; i++)
 			glMultiTexCoord2fARB(GLTexture[i], u, v);
 	}
 	if (r*r + g*g + b*b != 0)
@@ -655,10 +652,10 @@ void torus::sphere(bool s)
 {
 	if (s)
 	{
-		R = 23*a;
+		R = 21*a;
 		count();
 	}
-	else if (R < 23*a)
+	else if (R < 21*a)
 	{
 		R += 1;
 		count();
@@ -734,10 +731,13 @@ void torus::TexturesOn()
 			glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
 			glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_ADD);
 				
-			glEnable(GL_TEXTURE_GEN_S);
-			glEnable(GL_TEXTURE_GEN_T);
-			glTexGeni(GL_S,GL_TEXTURE_GEN_MODE,GL_SPHERE_MAP);
-			glTexGeni(GL_T,GL_TEXTURE_GEN_MODE,GL_SPHERE_MAP);
+			if (i == tex - 1 && !cub)
+			{
+				glEnable(GL_TEXTURE_GEN_S);
+				glEnable(GL_TEXTURE_GEN_T);
+				glTexGeni(GL_S,GL_TEXTURE_GEN_MODE,GL_SPHERE_MAP);
+				glTexGeni(GL_T,GL_TEXTURE_GEN_MODE,GL_SPHERE_MAP);
+			}
 		}
 	}
 }
@@ -751,8 +751,11 @@ void torus::TexturesOff()
 		for (int i = 1; i < tex; i++)
 		{
 			glActiveTexture(GLTexture[i]);
-			glDisable(GL_TEXTURE_GEN_S);
-			glDisable(GL_TEXTURE_GEN_T);
+			if (i == tex - 1 && !cub)
+			{
+				glDisable(GL_TEXTURE_GEN_S);
+				glDisable(GL_TEXTURE_GEN_T);
+			}
 			glDisable(GL_TEXTURE_2D);
 		}
 	}

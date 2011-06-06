@@ -5,6 +5,8 @@ extern const double Pi;
 extern int divs;
 extern GLenum GLTexture[GL_MAX_TEXTURE_UNITS_ARB];
 extern float timer;
+extern bool cub;
+extern GLuint cubic;
 	
 const float G = 6.67 * pow(10, -11);
 

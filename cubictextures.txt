@@ -1,0 +1,6 @@
+Textures/space1.bmp
+Textures/space1.bmp
+Textures/sky2.bmp
+Textures/down1.bmp
+Textures/space1.bmp
+Textures/space1.bmp
