@@ -1,7 +1,7 @@
-TEXTURES 13
+TEXTURES 14
 Textures/colormap.bmp
-Textures/colormap.bmp
-Textures/colormap.bmp
+Textures/box.bmp
+Textures/Wall.bmp
 Textures/Water.bmp
 Textures/tree.bmp
 Textures/Fichte.bmp
@@ -11,4 +11,5 @@ Textures/space.bmp
 Textures/carpet.bmp
 Textures/fur.bmp
 Textures/sky2.bmp
-Textures/colormap.bmp
+Textures/normal.bmp
+Textures/Floor.bmp

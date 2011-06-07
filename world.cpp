@@ -1,5 +1,16 @@
 #include "world.hpp"
 
+bool count_flag = false;
+//object args
+const int AXIS = 0;
+const int CENTER = 1;
+const int ANGLE = 2; 
+const int W = 3;
+const int VELOCITY = 4;
+const int ACCELERATION = 5;
+const int SCALE = 6;
+const int INFIN = 1000;
+
 vertex::vertex(const vertex& vert)
 {
 	x = vert.x;
@@ -11,6 +22,8 @@ vertex::vertex(const vertex& vert)
 	g = vert.g;
 	b = vert.b;
 	normal = NULL;
+	s = NULL;
+	t = NULL;
 }
 
 vertex::vertex(float c_x, float c_y, float c_z, float c_u, float c_v,
@@ -51,6 +64,27 @@ void vertex::setNormal(vertex set_normal)
 	}
 }
 
+void vertex::set_tTangent(vertex set_T)
+{
+	if (t != NULL )
+		delete t;
+	t = new vertex(set_T);
+}
+
+void vertex::count_sTangent()
+{
+	if (s != NULL)
+		delete s;
+	s = new vertex((*normal) * (*t)); 
+}
+
+void vertex::count_spacelight(vertex l)
+{
+	spacelight[0]	= (*s) / l;
+	spacelight[1] = (*t) / l;
+	spacelight[2] = (*normal) / l;
+}
+
 void vertex::setColors(float set_r, float set_g, float set_b)
 {
 	r = set_r;
@@ -62,13 +96,30 @@ void vertex::glCoords(int tex)
 {
 	if (tex >= 1)
 	{
-		for (int i = 0; i < tex; i++)
-			glMultiTexCoord2fARB(GLTexture[i], u, v);
+		if (bumps)
+		{
+			glMultiTexCoord2fARB(GLTexture[0], u, v);
+			glMultiTexCoord3fvARB(GLTexture[1], spacelight);
+		}
+		else if (bumps2)
+		{
+			glMultiTexCoord2fARB(GLTexture[0], u, v);
+		}
+		else 
+			for (int i = 0; i < tex; i++)
+				glMultiTexCoord2fARB(GLTexture[i], u, v);
 	}
 	if (r*r + g*g + b*b != 0)
 		glColor3f(r, g, b);
 	if (normal != NULL)
 		glNormal3f(normal->x, normal->y, normal->z);
+	if (fog)
+	{
+		if (y < start && y > end && x < 3.0 && x > -3.0 && z < 3.0 && z > -3.0 )
+			glFogCoordf((start-y)/(start-end));
+		else
+			glFogCoordf(0.0);
+	}
 	glVertex3f(x, y, z);
 }
 
@@ -85,7 +136,7 @@ vertex& vertex::operator=(const vertex vert)
 	return *this;
 }
 	
-vertex vertex::operator-(const vertex v1)
+vertex vertex::operator-(const vertex v1) const
 {
 	vertex aux;
 	aux = vertex(x - v1.x, y - v1.y, z - v1.z, 
@@ -94,7 +145,7 @@ vertex vertex::operator-(const vertex v1)
 	return aux;
 }
 
-vertex vertex::operator+(const vertex v1)
+vertex vertex::operator+(const vertex v1) const
 {
 	vertex aux;
 	aux = vertex(x + v1.x, y + v1.y, z + v1.z,
@@ -110,9 +161,27 @@ vertex vertex::operator*(const vertex v1)
 	return aux;
 }
 
-int vertex::operator/(const vertex v1)
+GLfloat vertex::operator/(const vertex v1)
 {
 	return x*v1.x+y*v1.y+z*v1.z;
+}
+	
+vertex mult(GLfloat* m, GLfloat* v) //умножение вектора с 4 координатами на матрицу 4 x 4
+{
+	GLfloat res[4];
+	vertex result;
+	res[0] = m[0] * v[0] + m[1] *v[1] + m[2] * v[2] + m[3] *v[3];
+	res[1] = m[4] * v[0] + m[5] *v[1] + m[6] * v[2] + m[7] *v[3];
+	res[2] = m[8] * v[0] + m[9] *v[1] + m[10]* v[2] + m[11]*v[3];	
+	res[3] = m[12]* v[0] + m[13]*v[1] + m[14]* v[2] + m[15]*v[3]; // или m[15] ? неясно	
+	//res[3] = m[15];
+	if (res[3] != 0)
+	{
+		result.x = res[0]/res[3];
+		result.y = res[1]/res[3];
+		result.z = res[2]/res[3];
+	}
+	return result;
 }
 
 vertex vertex::operator*(float lambda)
@@ -131,6 +200,11 @@ vertex vertex::operator/(float lambda)
 							 u/lambda, v/lambda, 
 							 r/lambda, g/lambda, b/lambda);
 	return aux;
+}
+	
+bool vertex::operator==(vertex v1)
+{
+	return (x == v1.x && y == v1.y && z == v1.z );
 }
 
 void vertex::Normal()
@@ -156,12 +230,18 @@ polygon::polygon(int count)
 	vert_count = count;
 	vertices = new vertex[count];
 	flag = false;
+  neighbours = new int[vert_count];
+	for (int i = 0; i < vert_count; i++)
+	{
+	  neighbours[i] = -1;
+	}
 }
 	
 polygon::~polygon()
 {
 	vert_count = 0;
 	delete [] vertices;
+	delete [] neighbours; // o/o/o/
 }
 	
 void polygon::Normal()
@@ -181,11 +261,12 @@ void polygon::Normal()
 		else
 		{
 			normal = normal/d;
-			normal.Normal();
+			if (!count_flag) 
+				normal.Normal();
 		}
 		flag = !flag;
 	}
-	else
+	else if (!count_flag) 
 		normal.Normal();
 
 	D = - (vertices[0] / normal);
@@ -382,6 +463,8 @@ interior::interior(const char* path)
 			exit(k*10 + 1);
 
     file.close();
+		
+
 }
 
 interior::~interior()
@@ -390,6 +473,121 @@ interior::~interior()
 		delete[] frames;
 	if (tex)
 		delete[] textures;
+}
+
+void interior::setConnectivity()
+{
+	//for each frame A
+	for (int i = 0; i < total; i++)
+	{
+		// for each edge in A
+		for (int j = 0; j < frames[i]->vert_count; j++)
+		{
+			// if there are no neighbours
+			if (frames[i]->neighbours[j] == -1)
+			{
+				// for each frame B except A
+				for (int k = 0; k < total && k != i; k++)
+				{
+					//for each edge in B
+					for (int h = 0; h < frames[k]->vert_count; h++)
+					{
+					//сравнение
+						vertex A1 = frames[i]->vertices[j];
+						vertex A2 = frames[i]->vertices[(j+1)%frames[i]->vert_count];
+
+						vertex B1 = frames[k]->vertices[h];
+						vertex B2 = frames[k]->vertices[(h+1)%frames[k]->vert_count];
+
+						if ((A1 == B1 && A2 == B2) || (A1 == B2 && A2 == B1))
+						{
+							frames[i]->neighbours[j] = k;
+							frames[k]->neighbours[h] = i;
+						}
+
+						//std::cout << "A: " << i << " B: " << k << std::endl;
+
+					}
+				}
+			}
+		}
+	}
+}
+
+void interior::castShadows(vertex Light)
+{
+	for (int i = 0; i < total; i++)
+	{
+		float side = frames[i]->normal / Light + frames[i]->D;
+	 	frames[i]->visible = (side > 0) ;	
+	}
+
+	glPushAttrib(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ENABLE_BIT | GL_POLYGON_BIT | GL_STENCIL_BUFFER_BIT);
+	//glDisable(GL_LIGHTING);
+	glDepthMask(GL_FALSE);
+	glDepthFunc(GL_LEQUAL);
+	glEnable(GL_STENCIL_TEST);
+	glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+	glStencilFunc(GL_ALWAYS, 1, 0xFFFFFFFFL);
+	//first pass
+	glFrontFace(GL_CCW);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
+	doShadowPass(Light);
+	//second pass
+	glFrontFace(GL_CW);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_DECR);
+	doShadowPass(Light);
+
+	glFrontFace(GL_CCW);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	glColor4f(0.0f, 0.0f, 0.0f, 0.4f);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glStencilFunc(GL_NOTEQUAL, 0, 0xFFFFFFFFL);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+	glPushMatrix();
+	glLoadIdentity();
+	glBegin(GL_TRIANGLE_STRIP);
+		glVertex3f(-0.1f, 0.1f, -0.10f);
+		glVertex3f(-0.1f,-0.1f, -0.10f);
+		glVertex3f( 0.1f, 0.1f, -0.10f);
+		glVertex3f( 0.1f,-0.1f, -0.10f);
+	glEnd();
+	glPopMatrix();
+	glPopAttrib();
+
+}
+
+void interior::doShadowPass(vertex Light)
+{
+	for (int i = 0; i < total; i++)
+	{
+		if (frames[i]->visible)
+		{
+			//for every edge
+			for (int j = 0; j < frames[i]->vert_count; j++)
+			{
+				int nindex = frames[i]->neighbours[j];
+				if (nindex == -1 || frames[nindex]->visible == false)
+				{
+					const vertex& v1 = frames[i]->vertices[j];
+					const vertex& v2 = frames[i]->vertices[(j+1)%frames[i]->vert_count];
+
+					vertex v3, v4;
+					v3 = (v1 - Light)*INFIN + v1;
+					v4 = (v2 - Light)*INFIN + v2;
+
+					glBegin(GL_TRIANGLE_STRIP);
+						glVertex3f(v1.x, v1.x, v1.x);
+						glVertex3f(v2.x, v2.x, v2.x);
+						glVertex3f(v3.x, v3.x, v3.x);
+						glVertex3f(v4.x, v4.x, v4.x);
+					glEnd();
+
+				}
+			}
+		}
+	}
 }
 
 void interior::display(vertex* viewer, bool lines)
@@ -401,7 +599,6 @@ void interior::display(vertex* viewer, bool lines)
 		vertex inception;
 		organize(inception);
 	}
-
 
 	for (int i = 0; i < total; i++)
 	{
@@ -424,7 +621,7 @@ void interior::TexturesOn()
 		glActiveTexture(GL_TEXTURE0_ARB);
 		glBindTexture(GL_TEXTURE_2D, gettex(0)); 
 		glEnable(GL_TEXTURE_2D);
-		if (tex > 1)
+		if (tex > 1 || bumps || bumps2)
 		{
 			glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
 			glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_REPLACE);
@@ -445,9 +642,7 @@ void interior::TexturesOff()
 {
 	if (tex >= 1)
 	{
- 		glActiveTexture(GL_TEXTURE0_ARB);
-		glDisable(GL_TEXTURE_2D);
-		for (int i = 1; i < tex; i++)
+		for (int i = 0; i < tex; i++)
 		{
 			glActiveTexture(GLTexture[i]);
 			glDisable(GL_TEXTURE_2D);
@@ -483,6 +678,17 @@ void interior::divide(int n)
 		frames = new polygon* [total + count - 1];
 		frames = frames_new;
 	}
+}
+
+void interior::processing()
+{
+		setConnectivity();
+		count_flag = true;
+		for (int q = 0; q < total; q++)
+		{
+			frames[q]->Normal();
+		}
+		count_flag = false;
 }
 
 void interior::organize(vertex viewer)
@@ -618,6 +824,13 @@ void torus::count()
 	storage[i][k].set3d(cos(alpha)*cos(phi),sin(alpha),cos(alpha)*sin(phi));
 	normal = storage[i][k];
 	storage[i][k].setNormal(normal);
+	
+	if (bumps)
+	{
+	storage[i][k].set_tTangent(vertex(-(float)sin(phi),0,(float)cos(phi)));
+		storage[i][k].count_sTangent();
+		storage[i][k].count_spacelight(Light);
+	}
 
 	storage[i][k] = storage[i][k] * ri;
 	storage[i][k] = storage[i][k] - dot;
@@ -702,6 +915,7 @@ void torus::addTexture(int t)
 			textures[i] = aux[i];
 		}
 		textures[tex-1] = t;
+        delete[] aux;
 	}
 }
 	
@@ -712,16 +926,43 @@ void torus::deleteLastTexture()
 
 void torus::TexturesOn()
 {
-	if (tex >= 1)
+	if (bumps)
+	{
+		glActiveTextureARB(GL_TEXTURE0_ARB);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, bumpMap);
+
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_ARB);
+		glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE0_RGB_ARB, GL_TEXTURE);
+		glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB_ARB, GL_REPLACE);
+
+		glActiveTextureARB(GL_TEXTURE1_ARB);
+		glEnable(GL_TEXTURE_CUBE_MAP_ARB);
+		glBindTexture(GL_TEXTURE_CUBE_MAP_ARB, normCubeMap);
+
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_ARB);
+		glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE0_RGB_ARB, GL_TEXTURE);
+		glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB_ARB, GL_DOT3_RGB_ARB);
+		glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE1_RGB_ARB, GL_PREVIOUS_ARB);
+
+	}
+	else if (bumps2)
+	{
+		glActiveTextureARB(GL_TEXTURE0_ARB);
+		glEnable(GL_TEXTURE_2D);
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+		glBindTexture(GL_TEXTURE_2D, gettex(0));
+	}
+	else if (tex >= 1)
 	{
 		glActiveTexture(GL_TEXTURE0_ARB);
 		glBindTexture(GL_TEXTURE_2D, gettex(0)); 
 		glEnable(GL_TEXTURE_2D);
-		if (tex > 1)
-		{
+		//if (tex > 1)
+		//{
 			glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE_EXT);
 			glTexEnvf(GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_REPLACE);
-		}
+		//}
 
 		for (int i = 1; i < tex; i++)
 		{
@@ -744,7 +985,21 @@ void torus::TexturesOn()
 
 void torus::TexturesOff()
 {
-	if (tex >= 1)
+	if (bumps)
+	{
+		glActiveTextureARB(GL_TEXTURE0_ARB);
+		glDisable(GL_TEXTURE_2D);
+		glActiveTextureARB(GL_TEXTURE1_ARB);
+		glDisable(GL_TEXTURE_CUBE_MAP_ARB);
+		//glActiveTextureARB(GL_TEXTURE0_ARB);
+		//glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	}
+	else if (bumps2)
+	{
+		glActiveTextureARB(GL_TEXTURE0_ARB);
+		glDisable(GL_TEXTURE_2D);
+	}
+	else if (tex >= 1)
 	{
  		glActiveTexture(GL_TEXTURE0_ARB);
 		glDisable(GL_TEXTURE_2D);
@@ -765,127 +1020,181 @@ GLuint torus::gettex(int n)
 {
 	return texture[textures[n]];
 }
-//GLuint gen::bezier(bpatch patch)
-//{
-	//int u = 0, v;
-	//float py, px, pyold;
-	//GLuint drawlist = glGenLists(1);
-	//vertex temp[4];
-	//vertex* last;
 
-	//last = new vertex[divs+1];
+GLuint gen::bezier(bpatch patch)
+{
+	int u = 0, v;
+	float py, px, pyold;
+	GLuint drawlist = glGenLists(1);
+	vertex temp[4];
+	vertex* last;
 
-	//if (patch.dlBPatch != 0)
-		//glDeleteLists(patch.dlBPatch, 1);
+	last = new vertex[divs+1];
 
-	//for (int k = 0; k < 4; k++)
-	//{
-		//temp[k] = patch.anchors[k][3];
-	//}
+	if (patch.dlBPatch != 0)
+		glDeleteLists(patch.dlBPatch, 1);
 
-	//for (v = 0; v < divs + 1; v++)
-	//{
-		//px = ((float)v)/((float)divs);
-		//last[v] = Bernstein(px, temp);
-	//}
+	for (int k = 0; k < 4; k++)
+	{
+		temp[k] = patch.anchors[k][3];
+	}
 
-	//glNewList(drawlist, GL_COMPILE);
-	//glActiveTexture(GL_TEXTURE0_ARB);
-	//glBindTexture(GL_TEXTURE_2D, texture[patch.textures[0]]);
-	//glEnable(GL_TEXTURE_2D);
+	for (v = 0; v < divs + 1; v++)
+	{
+		px = ((float)v)/((float)divs);
+		last[v] = Bernstein(px, temp);
+	}
 
-	//for (u = 1; u < divs + 1; u++)
-	//{
-		//py = ((float)u)/((float)divs);
-		//pyold = ((float)u - 1.0f)/((float)divs);
+	glNewList(drawlist, GL_COMPILE);
+	glActiveTexture(GL_TEXTURE0_ARB);
+	glBindTexture(GL_TEXTURE_2D, texture[patch.textures[0]]);
+	glEnable(GL_TEXTURE_2D);
 
-		//for (int k = 0; k < 4; k++)
-		//{
-			//temp[k] = Bernstein(py, patch.anchors[k]);
-		//}
+	for (u = 1; u < divs + 1; u++)
+	{
+		py = ((float)u)/((float)divs);
+		pyold = ((float)u - 1.0f)/((float)divs);
 
-		//glBegin(GL_TRIANGLE_STRIP);
-			//for (v = 0; v < divs + 1; v++)
-			//{
-				//px = ((float)v)/((float)divs);
+		for (int k = 0; k < 4; k++)
+		{
+			temp[k] = Bernstein(py, patch.anchors[k]);
+		}
+
+		glBegin(GL_TRIANGLE_STRIP);
+			for (v = 0; v < divs + 1; v++)
+			{
+				px = ((float)v)/((float)divs);
 				
-				 //glTexCoord2f(pyold, px);
-				//glVertex3d(last[v].x, last[v].y, last[v].z);
+				 glTexCoord2f(pyold, px);
+				glVertex3d(last[v].x, last[v].y, last[v].z);
 
-				//last[v] = Bernstein(px, temp);
-				 //glTexCoord2f(py, px);
-				//glVertex3d(last[v].x, last[v].y, last[v].z);
-			//}
+				last[v] = Bernstein(px, temp);
+				 glTexCoord2f(py, px);
+				glVertex3d(last[v].x, last[v].y, last[v].z);
+			}
 
-		//glEnd();
-	//}
+		glEnd();
+	}
 	
-	//glEndList();
+	glEndList();
 
-	//glActiveTexture(GL_TEXTURE0_ARB);
-	//glDisable(GL_TEXTURE_2D);
+	glActiveTexture(GL_TEXTURE0_ARB);
+	glDisable(GL_TEXTURE_2D);
 
-	//delete [] last;
-	//return drawlist;
-//}
+	delete [] last;
+	return drawlist;
+}
 
-//void bpatch::display()
-//{
-	//if (dlBPatch != 0)
-		//glCallList(dlBPatch);
-//}
+void bpatch::display()
+{
+	if (dlBPatch != 0)
+		glCallList(dlBPatch);
+}
 
-//bpatch::bpatch(const char* path)
-//{
-	//interior bez(path);
-	//if (bez.total != 4)
-		//exit(bez.total+4);
-	//for (int i = 0; i < 4; i++)
-		//for (int j = 0; j < 4; j++)
-		//{
-			//anchors[i][j] = bez.frames[i]->vertices[j];
-		//}
+bpatch::bpatch(const char* path)
+{
+	interior bez(path);
+	if (bez.total != 4)
+		exit(bez.total+4);
+	for (int i = 0; i < 4; i++)
+		for (int j = 0; j < 4; j++)
+		{
+			anchors[i][j] = bez.frames[i]->vertices[j];
+		}
 
-  //tex = bez.tex;
-	//textures = new int[tex];
-	//for (int k = 0; k < tex; k++)
-			//textures[k] = bez.textures[k];
+	tex = bez.tex;
+	textures = new int[tex];
+	for (int k = 0; k < tex; k++)
+			textures[k] = bez.textures[k];
 
-//}
+}
 
-//GLuint bpatch::dlBPatch = 0;
+GLuint bpatch::dlBPatch = 0;
 
-//vertex object::iforce(vertex dot) // сила, которую производит объект в заданной точке на единичную массу
-//{
-	//float r = distance(dot, center);
-	//vertex direction = center - dot;
-	//vertex inception;
-	//float d = distance(direction, inception);
-	//direction = direction / d;
-	//return direction * (mass*G/(r*r));
-//}
+object::object(interior& obj, int m)
+{
+	mass = m;
+	core = &obj;
+	axis = vertex (1.0, 1.0, 1.0);
+	scale = vertex (1.0, 1.0, 1.0);
+	//core->processing();
+}
 
-//float object::ipot(vertex dot)
-//{
-	//float r = distance(dot, center);
-	//return (-mass*G/r);
-//}
+void object::set(int arg, vertex param)
+{
+	switch (arg)
+	{
+		case AXIS:
+			axis = param;
+		break;
+		case CENTER:
+			center = param;
+		break;
+		case ANGLE:
+			angle = param;
+		break;
+		case W:
+			w = param;
+		break;
+		case VELOCITY:
+			velocity = param;
+		break;
+		case ACCELERATION:
+			acceleration = param;
+		break;
+		case SCALE:
+			scale = param;
+		break;
+	}
+}
 
-//void object::move()
-//{
-	//glPushMatrix();
+void object::move(bool dir, bool mirror)
+{
+	int i = dir ? 1 : -1;
+	glPushMatrix();
 
-	//velocity = velocity + acceleration*timer;	
-	//center = center + velocity;
-	//angle += w;
+	if (dir)
+	{
+		velocity = velocity + acceleration*timer;	
+		center = center + velocity*timer;
+		angle = angle + w;
+	}
+	if (!mirror)
+		glTranslatef(i*center.x, i*center.y, i*center.z);	
+	else
+		glTranslatef(center.x, i*center.y, center.z);	
 
-	//glTranslatef(center.x, center.y, center.z);	
-	//glRotatef(angle, axis.x, axis.y, axis.z);
-//}
+	glRotatef(i*angle.x, axis.x, 0, 0);
+	glRotatef(i*angle.y, 0, axis.y, 0);
+	glRotatef(i*angle.z, 0, 0, axis.z);
+	glScalef(scale.x, scale.y, scale.z);
+}
 
-//void object::display()
-//{
-	//move();
-	//core.display();
-	//glPopMatrix();
-//}
+void object::SpaceToObject(GLfloat* Vector)
+{
+	GLfloat Minv[16];
+
+	glPushMatrix();
+	glLoadIdentity();
+	move(false, false);
+	glGetFloatv(GL_MODELVIEW_MATRIX, Minv);
+	SpaceLight = mult(Minv, Vector);
+	glPopMatrix();
+	glPopMatrix();
+}
+
+void object::display(GLfloat* Vector, bool dir, bool mirror)
+{
+	move(dir, mirror);
+	core->display();
+	SpaceToObject(Vector);
+	core->castShadows(SpaceLight);
+	//glEnable(GL_LIGHTING);
+	glPopMatrix();
+}
+
+void object::divide(int n)
+{
+	core->divide(n);
+	core->processing();
+}

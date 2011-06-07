@@ -11,11 +11,35 @@
 
 #define BEZ_NUM 6
 
+const int AXIS = 0;
+const int CENTER = 1;
+const int ANGLE = 2;
+const int W = 3;
+const int VELOCITY = 4;
+const int ACCELERATION = 5;
+const int SCALE = 6;
+int gtime, save_time;
+
+extern vertex mult(GLfloat* m, GLfloat* v);
+
+bool fog = false;
+GLfloat fogColor[] = {0.5, 0.5, 0.6};
+float start, end;
+
 int total = 0;
 GLuint cubic;
+GLuint bumpMap;
+GLuint normCubeMap;
 bool cub = false;
 bool b = true;
 int save;
+
+bool nature = false;
+
+bool bumps = false;
+bool bumps2 = false;
+GLfloat Minv[16];
+vertex Light;
 
 const double Pi = 3.1415;
 const int FurCount = 16;
@@ -28,7 +52,7 @@ const int r = 2;
 torus Thor(R, r, 72, 34);
 torus FurThors[FurCount];
 
-int scene = 0;
+int scene = 1;
 
 GLenum GLTexture[GL_MAX_TEXTURE_UNITS_ARB]; //dirty hack (because I can't see any other way to use GL_TEXTUREn_ARB);
 
@@ -45,8 +69,8 @@ float t = 0;
 double x_angle = 30;
 double y_angle = 0;
 
-int light = 0;           // lighting on/off
-int blend = 0;        // blending on/off
+bool light = false;   
+int blend = 0;        // blended object on/off
 bool lines = true; //for mountains
 
 GLfloat xrot;            // x rotation
@@ -67,18 +91,22 @@ GLfloat therotate;
 
 GLfloat z=0.0f;                       // depth into the screen.
 
-GLfloat LightAmbient[]  = {0.0f, 0.0f, 0.0f, 0.0f}; 
+GLfloat LightAmbient[]  = {0.5f, 0.5f, 0.5f, 1.0f}; 
 GLfloat LightDiffuse[]  = {1.0f, 1.0f, 1.0f, 1.0f}; 
-GLfloat LightPosition[] = {0.0f, 1.0f, 0.0f, 1.0f};
+GLfloat LightPosition1[] = {0.0f, 0.85f, 0.0f, 1.0f};
+GLfloat LightPosition2[] = {0.0f, 0.5f, 0.0f, 0.0f};
 
 //interior prism("prism.txt");
 interior world("world.txt");
+//object World(world);
+interior Floor("Floor.txt");
 interior simple("simple.txt");
-//interior land("map3_landscape.txt");
-//bpatch bezier("bezier.txt");
-//interior Fichte("Fichte.txt");
-//interior Tree("tree.txt");
-//interior cube("cube.txt");
+interior land("map3_landscape.txt");
+bpatch bezier("bezier.txt");
+interior Fichte("Fichte.txt");
+interior cube("cube.txt");
+//object Cube(cube);
+//object Cube2(cube);
 interior ob("object.txt");
 interior bg("bg.txt");
 interior top("bg-top.txt");
@@ -103,12 +131,6 @@ GLuint texture[100];     // storage for 100 textures;
 unsigned char* map;
 int mapx;
 int mapy;
-
-//GLuint cube;
-//GLuint torus;
-//GLuint fichte;
-//GLuint tree;
-
 
 void landscape(const char* path, float x0, float y0)
 {
@@ -182,6 +204,96 @@ void landscape(const char* path, float x0, float y0)
 	
 }
 
+void getCubeVector(int side, int cubesize, int i, int j, 
+								float& x, float& y, float& z)
+{
+	float s = ((float) i + 0.5f) / (float) cubesize;
+	float t = ((float) j + 0.5f) / (float) cubesize;
+	float sc = 2*s - 1;
+	float tc = 2*t - 1;
+
+	switch (side)
+	{
+		case 0:
+			x = 1;
+			y = -tc;
+			z = -sc;
+		break;
+		case 1:
+			x = -1;
+			y = -tc;
+			z = sc;
+		break;
+		case 2:
+			x = sc;
+			y = 1;
+			z = tc;
+		break;
+		case 3:
+			x = sc;
+			y = -1;
+			z = -tc;
+		break;
+		case 4:
+			x = sc;
+			y = -tc;
+			z = 1;
+		break;
+		case 5:
+			x = -sc;
+			y = -tc;
+			z = -1;
+		break;
+	
+	}
+	float normal = sqrt(sc*sc + tc*tc + 1); 
+	if (normal != 0)
+		x /= normal;
+		y /= normal;
+		z /= normal;
+}
+
+void createNormalizationCubeMap(int cubesize)
+{
+	unsigned char* pixels = new unsigned char[3*cubesize*cubesize];
+	float x, y, z;
+
+	glGenTextures(1, &normCubeMap);
+	glBindTexture(GL_TEXTURE_CUBE_MAP_ARB, normCubeMap);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+	glTexParameterf(GL_TEXTURE_CUBE_MAP_ARB, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_CUBE_MAP_ARB, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_CUBE_MAP_ARB, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+	for (int side = 0; side < 6; side++)
+	{
+		for (int i = 0; i < cubesize; i++)
+		{
+			for (int j = 0; j < cubesize; j++)
+			{
+				int offs = 3 * (j * cubesize + i);
+
+				getCubeVector(side, cubesize, i, j, x, y, z);
+				pixels [offs] = 128 + 127 * x;
+				pixels [offs + 1] = 128 + 127 * y;
+				pixels [offs + 2] = 128 + 127 * z;
+			}
+		}
+		//glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X_ARB + side, 0, GL_RGB, 
+								//cubesize, cubesize, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+		gluBuild2DMipmaps(GL_TEXTURE_CUBE_MAP_POSITIVE_X_ARB+side, GL_RGB8, cubesize, cubesize, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+	}
+	delete[] pixels;
+
+	glEnable(GL_TEXTURE_CUBE_MAP_ARB);
+	
+	glTexParameteri(GL_TEXTURE_CUBE_MAP_ARB, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP_ARB, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glDisable(GL_TEXTURE_CUBE_MAP_ARB);
+
+}
+
 void LoadCubicMaps()
 {
 	using namespace std;
@@ -247,7 +359,7 @@ void init(int Width, int Height)
 	getline(file, oneline, '\n');
 	sscanf(oneline.c_str(), "TEXTURES %d\n", &total);
     
-	glEnable(GL_TEXTURE_2D);                    // Enable texture mapping.
+	glEnable(GL_TEXTURE_2D);  
 
 	for (int i = 0; i < total; i++)
 	{
@@ -276,6 +388,7 @@ void init(int Width, int Height)
 				else
 				  bk_bits[4*j + 3] = (unsigned char)(((int)bk_bits2[3*j] + (int)bk_bits2[3*j + 1] + (int)bk_bits2[3*j + 2])/3);
 			}
+
 	
 			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 			glGenTextures(1, &texture[i]);
@@ -290,9 +403,19 @@ void init(int Width, int Height)
 			gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA, bk_width, bk_height, GL_RGBA,
 							 GL_UNSIGNED_BYTE,bk_bits);
 			glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
+			
+			if (oneline.find("normal") != oneline.npos)
+			{
+				bumpMap = texture[i];
+				if (bk_width != bk_height)
+					exit(bk_width);
+				createNormalizationCubeMap(bk_height);
+			}
 		}
 
 	}
+	
+	glDisable(GL_TEXTURE_2D);  
 
 	if (bk_bits != NULL)
 		delete[] bk_bits;
@@ -316,23 +439,18 @@ void init(int Width, int Height)
 		
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_NORMALIZE);
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_FRONT);
 	glEnable(GL_LIGHTING);
+	glClearStencil(0);
     
 	
 	for (int i = 0; i < treeCount; i++)
 		fichten[i] = -GroundSize + TreeSize + 2*rand()*(GroundSize - TreeSize)/RAND_MAX;
 
-// основные display lists
 	
-	//cube = gen::cube();
-	//torus = gen::torus(2.0,0.5,25,20); 
-	//fichte = gen::other(Fichte);
-	//tree = gen::other(Tree);
-	
-	world.divide(1000);
+	world.divide(100);
+	Floor.divide(100);
 
 	Thor.addTexture(6);
 	Thor.addTexture(8);
@@ -344,11 +462,24 @@ void init(int Width, int Height)
 	}
 
 	LoadCubicMaps();
+	
+	glLightfv(GL_LIGHT2, GL_AMBIENT, LightAmbient);  
+  glLightfv(GL_LIGHT2, GL_DIFFUSE, LightDiffuse);  
+  glLightfv(GL_LIGHT2, GL_POSITION, LightPosition2);
+	
+	glLightfv(GL_LIGHT1, GL_AMBIENT, LightAmbient);  
+  glLightfv(GL_LIGHT1, GL_DIFFUSE, LightDiffuse);  
+	glEnable(GL_LIGHT1);
+	
+	//Cube2.set(SCALE, vertex(0.25, 0.25, 0.25));
+	//Cube2.set(CENTER, vertex(0.5, 0.5, 0.5));
+	//Cube.set(SCALE, vertex(0.1125, 0.1125, 0.1125));
+	//Cube.set(CENTER, vertex(1.5, 0.4, 1.5));
 
 }
 
 
-GLfloat dir[] = {0,-1,0,1};
+//GLfloat dir[] = {0,-1,0,1};
 
 vertex GetPos(int x, int y)
 {
@@ -372,6 +503,24 @@ vertex GetPos(int x, int y)
 	return vertex(posX, posY, posZ, 0, 0, 0, 0, 0);
 }
 
+void RenderObjects(bool dir)
+{
+	world.display();
+	//Cube.display(LightPosition1, dir);
+	//Cube2.display(LightPosition1, dir);
+
+	if (blend)
+	{
+	//полупрозрачный объект с упорядоченным выводом граней
+		glEnable(GL_BLEND);
+		vertex* viewer = new vertex(GetPos(0, 0));
+		ob.display(viewer);
+		delete viewer;
+		glDisable(GL_BLEND);
+	}
+
+}
+
 
 void display()
 {
@@ -381,10 +530,12 @@ void display()
 
   xtrans = -xpos;
   ztrans = -zpos;
-  ytrans = -walkbias-1.0f;
+  ytrans = -walkbias-0.5f;
   sceneroty = 360.0f - yrot;
     	
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);		
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);		
+	double eqr[] = {0.0f,-1.0f, 0.0f, 0.0f};
+
   glLoadIdentity();
 
   glRotatef(lookupdown, 1.0f, 0, 0);
@@ -392,25 +543,24 @@ void display()
 	
   glTranslatef(xtrans, ytrans, ztrans);    
 
-	glLightfv(GL_LIGHT1, GL_AMBIENT, LightAmbient);  // add lighting. (ambient)
-  glLightfv(GL_LIGHT1, GL_DIFFUSE, LightDiffuse);  // add lighting. (diffuse).
-  glLightfv(GL_LIGHT1, GL_POSITION,LightPosition); // set light position.
-  glEnable(GL_LIGHT1);                             // turn light 1 on.
-
-
+  glLightfv(GL_LIGHT1, GL_POSITION, LightPosition1);
+	
+	//рисуем фон
+	glPushMatrix();
+	glScalef(50, 50, 50);	
+	bg.display();
+	top.display();
+	bottom.display();
+	glScalef(0.02, 0.02, 0.02);	
+	glPopMatrix();
 
 	switch (scene)
 	{
 		case 0:
 		{
-			glPushMatrix();
-			glScalef(50, 50, 50);	
-			//рисуем фон
-			bg.display();
-			top.display();
-			bottom.display();
-			glScalef(0.02, 0.02, 0.02);	
-			
+  		glDisable(GL_LIGHT1);                           
+  		glEnable(GL_LIGHT2);                           
+
 			rtri += 0.3;
 			rtrq +=0.35;
 			rtrp +=0.35;
@@ -424,7 +574,30 @@ void display()
 
 			// рисуем сферотор
 			
-			if (!cub)
+			if (bumps)
+			{
+				//координаты источника света в с.к. объекта
+				glPushMatrix();
+				glLoadIdentity();
+				glTranslatef(0.0f,0.0f, 27.0f);		
+				glRotatef(-rtri, 1.0f, 0.0f, 0.0f);
+				glRotatef(-rtrq, 0.0f, 1.0f, 0.0f);
+				glRotatef(-rtrp, 0.0f, 0.0f, 1.0f);
+				glGetFloatv(GL_MODELVIEW_MATRIX, Minv);
+				Light = mult(Minv, LightPosition2);
+				glPopMatrix();
+
+				glDisable(GL_BLEND);
+				Thor.display();
+				glBlendFunc(GL_DST_COLOR, GL_ZERO);
+				glEnable(GL_BLEND);
+				bumps = false;
+				bumps2 = true;
+				Thor.display();
+				bumps = true;
+				bumps2 = false;
+			}
+			else if (!cub)
 			{
 				Thor.display();	
 
@@ -440,10 +613,10 @@ void display()
 						float shadow = shadowMin*(1-t) + shadowMax;
 						glColor4f(1, 1, 1, shadow);
 	
-						if (fire)
+						//if (fire)
 							glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-						else
-							glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+						//else
+							//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	
 						FurThors[i].display();
 	
@@ -490,72 +663,138 @@ void display()
 		break;
 		case 1:
 		{
-	//комната
-	world.display();
+			bumps = false;
+			bumps2 = false;
+			glDisable(GL_CULL_FACE);
+  		glDisable(GL_LIGHT2);                           
+  		glLightfv(GL_LIGHT1, GL_POSITION, LightPosition1);
+  		glEnable(GL_LIGHT1);                           
+			//glEnable(GL_LIGHTING);
+	
+			//задаём туман
+			if (fog)
+			{
+				start = 0.4;
+				end = 0.0;
+				glEnable(GL_FOG);
+				//glFogi(GL_FOG_MODE, GL_LINEAR);
+				glFogfv(GL_FOG_COLOR, fogColor);
+				glFogf(GL_FOG_START, start);
+				glFogf(GL_FOG_END, end);
+				glFogi(GL_FOG_HINT, GL_NICEST); // должен быть попиксельным
+				glHint(GL_FOG_HINT, GL_NICEST); // должен быть попиксельным
+				glFogi(GL_FOG_COORDINATE_SOURCE_EXT, GL_FOG_COORDINATE_EXT);
+			}	
+			else 
+				glDisable(GL_FOG);
 
+			glPushMatrix();
+	
+			//комната		
+
+			glEnable(GL_STENCIL_TEST);	
+			glStencilFunc(GL_ALWAYS, 1, 1);	
+			glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);	
+			glDisable(GL_DEPTH_TEST);					
+			
+			Floor.display();			
+													
+			glEnable(GL_DEPTH_TEST);
+			glColorMask(1,1,1,1);		
+			glStencilFunc(GL_EQUAL, 1, 1);			
+			glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);		
+			glEnable(GL_CLIP_PLANE0);							
+			glClipPlane(GL_CLIP_PLANE0, eqr);			
+
+			glPushMatrix();	
+					glScalef(1.0f, -1.0f, 1.0f);	
+					glLightfv(GL_LIGHT1, GL_POSITION, LightPosition1);
+					
+					RenderObjects(false);
+
+			glPopMatrix();
+
+			glDisable(GL_CLIP_PLANE0);
+			glDisable(GL_STENCIL_TEST);	
+			glLightfv(GL_LIGHT1, GL_POSITION, LightPosition1);
+			glEnable(GL_BLEND);								
+			glDisable(GL_LIGHTING);					
+			glColor4f(1.0f, 1.0f, 1.0f, 0.8f);				
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	
+			Floor.display();		
+	
+			if (light)
+				glEnable(GL_LIGHTING);
+			glDisable(GL_BLEND);				
+
+			RenderObjects(true);									
+
+			glPopMatrix();
+
+	// природа		
+	
+			if (nature)
+			{
+	
+	//горы, сгенерированные из bmp
+	glDisable(GL_TEXTURE_2D);
+	land.display(NULL, lines);
+	glEnable(GL_TEXTURE_2D);
 	//волны с помощью B-spline (кривых Безье)
+
+	glPushMatrix();	
+	glTranslatef(3.0, 0, -13.0);
+	int k = 1;
+
+	bezier.dlBPatch = gen::bezier(bezier);
+	for (int j = 0; j < BEZ_NUM; j++)
+	{
+		glTranslatef(-1.50*BEZ_NUM+0.75*k, 0, 1.50);
+		for (int i = 0; i < BEZ_NUM; i++)
+		{
+			glTranslatef(1.50, 0, 0);
+			bezier.display();
+		}	
+		k = -k;
+	}
+
+	glPopMatrix();
 	
-	//glTranslatef(0, 0, -20);
-	//int k = 1;
-
-	//bezier.dlBPatch = gen::bezier(bezier);
-	//for (int j = 0; j < BEZ_NUM; j++)
-	//{
-		//glTranslatef(-1.50*BEZ_NUM+0.75*k, 0, 1.50);
-		//for (int i = 0; i < BEZ_NUM; i++)
-		//{
-			//glTranslatef(1.50, 0, 0);
-			//bezier.display();
-		//}	
-		//k = -k;
-	//}
 	
-	//glTranslatef(0, 0, 10);
-	//glRotatef(180*piover180, 0, 1, 0);
-
-	//glTranslatef(1.5, 0.5, -1.5);
-	//glTranslatef(-1.5, -0.5, 1.5);
-	// горы, сгенерированные из bmp
-	//land.display(lines);
-
 	//хвойный лес из billboards
 	
-	//glTranslatef(10, 0, 10);
-	//glRotatef(180*piover180, 0, 1, 0);
+	glPushMatrix();	
+	glTranslatef(-3.0, 0, -3.0);
+	glRotatef(-90, 0.0, 1.0, 0.0);
 		
-	//glEnable(GL_ALPHA_TEST);
-	//glAlphaFunc(GL_GREATER, 0.05);
+	glEnable(GL_ALPHA_TEST);
+	glAlphaFunc(GL_GREATER, 0.05);
 	
-	//for (int i = 0; i < treeCount; i++) 
-	//{
-		//int index = (yrot > 180) ? (i) : (treeCount - 1 - i);
-		//double x = -GroundSize + TreeSize + 2*(GroundSize - TreeSize)*index/(treeCount - 1);
-		//double z = fichten[index];
+	for (int i = 0; i < treeCount; i++) 
+	{
+		int index = (yrot > 180) ? (i) : (treeCount - 1 - i);
+		double x = -GroundSize + TreeSize + 2*(GroundSize - TreeSize)*index/(treeCount - 1);
+		double z = fichten[index];
 
-		//glPushMatrix();
+		glPushMatrix();
 
-	//	//glLoadIdentity();
-		//glTranslated(0,0,-3*GroundSize);
-		//glRotated(xrot,1,0,0);
-		//glRotated(yrot,0,1,0);
-		//glTranslated(x,0,z);
-		//glRotated(-yrot,0,1,0);
-		//glRotated(-xrot,1,0,0);
+		//glLoadIdentity();
+		glTranslated(0,0,-3*GroundSize);
+		glRotated(xrot,1,0,0);
+		glRotated(yrot,0,1,0);
+		glTranslated(x,0,z);
+		glRotated(-yrot,0,1,0);
+		glRotated(-xrot,1,0,0);
 
-		//Fichte.display();
+		Fichte.display();
 
-		//glPopMatrix();
-	//}
+		glPopMatrix();
+	}
 	
-	//glDisable(GL_ALPHA_TEST);
-	
-	//glTranslatef(-10, 0, -10);
-
-  //usleep(1000);
-	//полупрозрачный объект с упорядоченным выводом граней
-	//vertex* viewer = new vertex(GetPos(0, 0));
-	//ob.display(viewer);
-	//delete viewer;
+	glDisable(GL_ALPHA_TEST);
+	glPopMatrix();
+		}
 	
 		}
 		break;
@@ -652,15 +891,49 @@ void keyPressed(unsigned char key, int x, int y)
 			case 'B': case 'b':
 				b = !b;
 			break;
+			case 'T': case 't':
+				bumps = !bumps;
+			break;
+			case '1': 
+				scene = 1;
+			break;
+			}
+		case 1:
+   		switch (key) 
+			{    
+   		case ESCAPE: 
+				exit(1);                   	
+			break; 
+    	case 'l': case 'L': 
+			{
+				light = !light; 
+				if (!light) 
+	    		glDisable(GL_LIGHTING);
+	 			else 
+	   	 		glEnable(GL_LIGHTING);
+			}
+			break;
+			//hills:
+			case 'H':  case 'h':
+				lines = !lines;                   	
+			break; 
+			case 'y': case 'Y':
+				fog = !fog;
+			break;
+			case '0': 
+				scene = 0;
+			break;
+			case 'n': case 'N' :
+				nature = !nature;
+			break;
+			case 'b': case 'B' :
+				blend = !blend;
+			break;
+	
 			}
 		break;
 		}
 
-				//hills:
-        //case 'H': 
-			 //case 'h':
-				//lines = !lines;                   	
-				//break; 
 }
 
 void specialKeyPressed(int key, int x, int y) 
@@ -719,6 +992,10 @@ void idle()
 	t+=0.1;
 	divs = 7 + (int) (7.0*sin(t));
 	display();
+	
+	gtime = glutGet(GLUT_ELAPSED_TIME);
+	timer = (save_time - gtime)/1000.0; // секунда
+	save_time = gtime;
 }
 
 int main(int argc, char *argv[])
@@ -746,6 +1023,12 @@ int main(int argc, char *argv[])
     glutInitWindowPosition(0, 0);  
     glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH | GLUT_ALPHA);  
     glutCreateWindow("Khoom");  
+		GLenum err = glewInit();
+		if (GLEW_OK != err)
+		{
+			cout << "glewInit failed!" << endl;
+			exit(42);
+		}
 		glutDisplayFunc(display);  
     glutFullScreen();
 		glutIdleFunc(&idle); 

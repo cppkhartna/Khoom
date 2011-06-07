@@ -1,5 +1,8 @@
 #include "khoom.hpp"
 
+class vertex;
+class interior;
+
 extern GLuint texture[100];
 extern const double Pi;
 extern int divs;
@@ -7,15 +10,25 @@ extern GLenum GLTexture[GL_MAX_TEXTURE_UNITS_ARB];
 extern float timer;
 extern bool cub;
 extern GLuint cubic;
-	
-const float G = 6.67 * pow(10, -11);
+extern GLuint bumpMap;
+extern GLuint normCubeMap;
+extern vertex Light;
+extern bool bumps;
+extern bool bumps2;
+extern bool fog;
+extern float start, end;
+
+const float g = 9.8;
 
 class vertex 
 {
 	GLfloat x, y, z; //3d
 	GLfloat u, v;    //texture
 	GLfloat r, g, b; //colors
+	float foggi;
 	vertex* normal;
+	vertex *s, *t;
+	GLfloat spacelight[3];
 public:
   vertex(const vertex& vert);
 	vertex(float c_x = 0, float c_y = 0, float c_z = 0,
@@ -26,18 +39,24 @@ public:
 	void setTex(float set_u, float set_v);
 	void setColors(float set_r, float set_g, float set_b);
   void setNormal(vertex set_normal);
+  void set_tTangent(vertex set_T);
+  void count_sTangent();
+	void count_spacelight(vertex l);
 	void glCoords(int tex = 0);
 	vertex& operator=(const vertex vert);
 	friend float distance(vertex v1, vertex v2);
-	vertex operator-(const vertex v1); // точка = радиус-вектор
-	vertex operator+(const vertex v1);
+	vertex operator-(const vertex v1) const; // точка = радиус-вектор
+	vertex operator+(const vertex v1) const;
 	vertex operator*(const vertex v1); //векторное произведение
-	int operator/(const vertex v1); //скалярноe произведение
+	GLfloat operator/(const vertex v1); //скалярноe произведение
 	vertex operator*(float lambda);
+	friend vertex mult(GLfloat* m, GLfloat* v); //умножение вектора с 4 координатами на матрицу 4 x 4
 	vertex operator/(float lambda);
+	bool operator==(vertex v1);
 	friend vertex Bernstein(float u, vertex* p);
 	friend class gen;
 	friend class object;
+	friend class interior;
 
 	void Normal();
 };
@@ -51,6 +70,7 @@ class polygon
 	vertex normal;
 	int D;
 	bool flag;
+	int* neighbours;
 public:
 	polygon (int count = 3);
 	virtual ~polygon ();
@@ -63,6 +83,8 @@ public:
 	friend class bpatch;
 	triangle** divide(int& vert);
 	float operator-(vertex A);
+	friend class interior;
+	bool visible;
 };
 
 class triangle : public polygon 
@@ -72,11 +94,14 @@ class triangle : public polygon
 	vertex normal;
 	int D;
 	bool flag;
+	int* neighbours;
 public:
 	triangle () : polygon(3), vert_count(3){};
 	~triangle (){};
 	virtual void glPolygon(int tex = 0);
 	void glLines();
+	friend class interior;
+	bool visible;
 };
 
 class quad : public polygon
@@ -86,11 +111,14 @@ class quad : public polygon
 	vertex normal;
 	int D;
 	bool flag;
+	int* neighbours;
 public:
 	quad () : polygon(4), vert_count(4) {};
 	~quad () {};
 	virtual void glPolygon(int tex = 0);
 	void glLines();
+	friend class interior;
+	bool visible;
 };
 
 float distance(vertex v1, vertex v2);
@@ -117,6 +145,10 @@ public:
 	virtual void TexturesOn();
 	virtual void TexturesOff();
 	virtual GLuint gettex(int n);
+	void processing();
+	void setConnectivity();
+	void castShadows(vertex Light);
+	void doShadowPass(vertex Light);
 public:
 	int* textures;
 	int tex;
@@ -170,31 +202,26 @@ public:
 	int tex;
 };
 
-//class object 
-//{
-	//interior core; //???!!!
-	//int count;
-	//vertex axis;
-	//vertex center;
-	//GLfloat angle;
-	//GLfloat w;
-	//vertex velocity;
-	//vertex acceleration;
-	//int mass;
-//public:
-	//object ();
-	//~object ();
-	//vertex iforce(vertex dot);
-	//float ipot(vertex dot);
-	//void display();
-	//void move();
-//};
-
-//class location 
-//{
-	//object* objects;
-	//int total;
-//public:
-	//location () {};
-	//~location (){};
-//};
+class object 
+{
+	interior* core;
+	vertex axis;
+	vertex center;
+	vertex angle;
+	vertex w;
+	vertex velocity;
+	vertex acceleration;
+	vertex scale;
+	vertex additionalForce;
+	int mass;
+	vertex SpaceLight;
+public:
+	object (interior& obj, int m = 0);
+	~object () {};
+	void display(GLfloat* Vector, bool dir = true, bool mirror = false);
+	void move(bool dir, bool mirror);
+	void set(int arg, vertex param);
+	//void ForceMe(vertex addForce);
+	void SpaceToObject(GLfloat* Vector);
+	void divide(int n = 1);
+};
